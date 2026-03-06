@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.timetracker.locationhelper</string>
+    <key>CFBundleName</key>
+    <string>time-tracker-location</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Time Tracker records your location at the start of each work session for attendance purposes.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Time Tracker records your location at the start of each work session for attendance purposes.</string>
+</dict>
+</plist>

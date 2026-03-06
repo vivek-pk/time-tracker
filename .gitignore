@@ -1,0 +1,16 @@
+# Binaries
+bin/
+*.app/
+
+# Environment (contains secrets)
+.env
+!.env.example
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

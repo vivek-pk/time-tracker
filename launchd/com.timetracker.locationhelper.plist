@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.timetracker.locationhelper.plist
+  =====================================
+  Install path: /Library/LaunchAgents/com.timetracker.locationhelper.plist
+  Owner / permissions: root:wheel  0644
+
+  Unlike the system daemon (LaunchDaemon), this is a *LaunchAgent* — it runs
+  in the logged-in user's session, which is required for CoreLocation access.
+
+  It captures the GPS/WiFi-based location every 5 minutes and writes the
+  result to /tmp/time-tracker-location.json, which the system daemon reads
+  when opening a new activity session.
+
+  On first run the user will see a permission prompt — they must allow
+  "time-tracker-location" in:
+    System Settings > Privacy & Security > Location Services
+-->
+<plist version="1.0">
+<dict>
+
+    <key>Label</key>
+    <string>com.timetracker.locationhelper</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/time-tracker-location</string>
+    </array>
+
+    <!-- Run immediately at login, then every 5 minutes. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <!-- Background priority — minimal CPU/battery impact. -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- Restart quickly if the helper crashes. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/time-tracker-location.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/time-tracker-location-error.log</string>
+
+</dict>
+</plist>

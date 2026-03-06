@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.timetracker.daemon.plist
+  ============================
+  Install path: /Library/LaunchDaemons/com.timetracker.daemon.plist
+  Owner / permissions: root:wheel  0644
+
+  Because this is a *System Daemon* (in /Library/LaunchDaemons) launchd runs
+  it as root and the process is not associated with any user session.  A
+  standard user cannot stop, unload, or disable it — only root / sudo can.
+
+  To load (first install):
+      sudo launchctl load -w /Library/LaunchDaemons/com.timetracker.daemon.plist
+
+  To reload after editing the plist:
+      sudo launchctl unload /Library/LaunchDaemons/com.timetracker.daemon.plist
+      sudo launchctl load   /Library/LaunchDaemons/com.timetracker.daemon.plist
+
+  To check status:
+      sudo launchctl list | grep timetracker
+-->
+<plist version="1.0">
+<dict>
+
+    <!-- Unique identifier — must match the filename stem. -->
+    <key>Label</key>
+    <string>com.timetracker.daemon</string>
+
+    <!-- Binary installed by 'make install'. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/time-tracker</string>
+    </array>
+
+    <!-- Point the binary at the admin-managed config file. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ENV_FILE</key>
+        <string>/etc/time-tracker/.env</string>
+    </dict>
+
+    <!-- Start immediately when the plist is loaded and on every boot. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!--
+      KeepAlive = true  →  launchd will restart the process if it exits for
+      any reason (crash, OOM kill, accidental SIGKILL).  This is the key
+      setting that prevents users from killing the daemon with Activity
+      Monitor — launchd just brings it back within a few seconds.
+    -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Throttle restart storms: wait at least 10 s between restarts. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Low I/O and CPU priority so the tracker never impacts the user. -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- Nice value: +10 pushes the process below normal interactive tasks. -->
+    <key>Nice</key>
+    <integer>10</integer>
+
+    <!-- Log files.  The install script creates these directories. -->
+    <key>StandardOutPath</key>
+    <string>/var/log/time-tracker/output.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/var/log/time-tracker/error.log</string>
+
+    <!--
+      AbandonProcessGroup = true  →  when launchd stops the daemon it does
+      not send SIGKILL to any child processes the daemon may have spawned
+      (we don't spawn children, but it is good hygiene).
+    -->
+    <key>AbandonProcessGroup</key>
+    <true/>
+
+</dict>
+</plist>
