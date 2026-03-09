@@ -375,12 +375,13 @@ do_install() {
     kill "$SPIN_PID" 2>/dev/null; wait "$SPIN_PID" 2>/dev/null || true
     clear_line
 
-    local LOC_APP_DIR="/tmp/time-tracker-location.app"
+    local LOC_APP_DIR="/Applications/time-tracker-location.app"
     local LOC_APP_CONTENTS="$LOC_APP_DIR/Contents"
     local LOC_APP_MACOS="$LOC_APP_CONTENTS/MacOS"
     local LOC_ENTITLEMENTS="/tmp/time-tracker-loc-entitlements.plist"
 
     # Create app bundle
+    rm -rf "$LOC_APP_DIR" 2>/dev/null || true
     mkdir -p "$LOC_APP_MACOS"
     cp "$LOC_DST" "$LOC_APP_MACOS/time-tracker-location"
 
@@ -496,11 +497,6 @@ ENTPLIST
         launchctl bootout "gui/${CURRENT_UID}/${AGENT_LABEL}" 2>/dev/null || true
         if launchctl bootstrap "gui/${CURRENT_UID}" "$AGENT_PLIST" 2>/dev/null; then
             step_done "for user $CURRENT_USER" $S $TOTAL_STEPS "Loading location agent"
-            # Keep the app bundle in system Applications so LaunchAgent can use it
-            if [[ -d "$LOC_APP_DIR" ]]; then
-                rm -rf "/Applications/time-tracker-location.app" 2>/dev/null || true
-                cp -R "$LOC_APP_DIR" "/Applications/time-tracker-location.app" 2>/dev/null || true
-            fi
         else
             step_warn "log out & back in to activate" $S $TOTAL_STEPS "Loading location agent"
         fi
