@@ -1,0 +1,13 @@
+{
+    "sync_api_url": "https://webhook.site/e91001a8-dd08-4632-8ebf-c9ef2907a5cf",
+    "sync_api_key": "",
+    "morning_sync_hour": 6,
+    "evening_sync_hour": 18,
+    "evening_sync_minute": 30,
+    "idle_threshold_minutes": 5,
+    "poll_interval_seconds": 30,
+    "db_path": "/var/lib/time-tracker/tracker.db",
+    "log_path": "/var/log/time-tracker",
+    "retention_days": 15,
+    "sync_timeout_seconds": 30
+}

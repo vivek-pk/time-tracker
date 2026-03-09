@@ -1,6 +1,8 @@
 package config
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -13,7 +15,7 @@ import (
 )
 
 // These vars are injected at build time via -ldflags -X.
-// They act as compiled-in defaults; env vars / .env file still override them.
+// They act as the lowest-priority fallback; config.json and env vars override them.
 var (
 	DefaultSyncAPIURL = ""
 	DefaultSyncAPIKey = ""
@@ -21,7 +23,29 @@ var (
 	DefaultLogPath    = "/var/log/time-tracker"
 )
 
-// Config holds all runtime configuration loaded from environment variables.
+// embeddedConfigJSON is the config.json file baked into the binary at build time.
+// Edit internal/config/config.json with your API URL and key before building.
+//
+//go:embed config.json
+var embeddedConfigJSON []byte
+
+// jsonConfig mirrors config.json structure. Pointer types for ints let us
+// distinguish "not set" from "set to 0".
+type jsonConfig struct {
+	SyncAPIURL           string `json:"sync_api_url,omitempty"`
+	SyncAPIKey           string `json:"sync_api_key,omitempty"`
+	MorningSyncHour      *int   `json:"morning_sync_hour,omitempty"`
+	EveningSyncHour      *int   `json:"evening_sync_hour,omitempty"`
+	EveningSyncMinute    *int   `json:"evening_sync_minute,omitempty"`
+	IdleThresholdMinutes *int   `json:"idle_threshold_minutes,omitempty"`
+	PollIntervalSeconds  *int   `json:"poll_interval_seconds,omitempty"`
+	DBPath               string `json:"db_path,omitempty"`
+	LogPath              string `json:"log_path,omitempty"`
+	RetentionDays        *int   `json:"retention_days,omitempty"`
+	SyncTimeoutSeconds   *int   `json:"sync_timeout_seconds,omitempty"`
+}
+
+// Config holds all runtime configuration.
 type Config struct {
 	MachineID            string
 	SyncAPIURL           string
@@ -37,26 +61,39 @@ type Config struct {
 	SyncTimeoutSeconds   int
 }
 
-// Load reads config from an optional .env file then environment variables.
+// Load reads config with the following priority (highest wins):
+//
+//	1. Environment variables (including those set by .env file)
+//	2. Embedded config.json (baked into the binary at build time)
+//	3. Compiled-in defaults (set via -ldflags or hardcoded)
 func Load(envFilePath string) (*Config, error) {
+	// Step 1: Parse embedded config.json
+	var jc jsonConfig
+	if err := json.Unmarshal(embeddedConfigJSON, &jc); err != nil {
+		log.Printf("config: embedded config.json parse error: %v (using defaults)", err)
+	}
+
+	// Step 2: Load optional .env file (sets env vars that take priority)
 	if envFilePath != "" {
 		if err := godotenv.Load(envFilePath); err != nil {
-			log.Printf("config: .env not found at %s, using env vars only", envFilePath)
+			log.Printf("config: .env not found at %s, using embedded config", envFilePath)
 		}
 	}
+
+	// Step 3: Build config — env vars > config.json > compiled defaults
 	cfg := &Config{
 		MachineID:            machineID(),
-		SyncAPIURL:           envOrDef("SYNC_API_URL", DefaultSyncAPIURL),
-		SyncAPIKey:           envOrDef("SYNC_API_KEY", DefaultSyncAPIKey),
-		MorningSyncHour:      intEnv("MORNING_SYNC_HOUR", 6),
-		EveningSyncHour:      intEnv("EVENING_SYNC_HOUR", 18),
-		EveningSyncMinute:    intEnv("EVENING_SYNC_MINUTE", 30),
-		IdleThresholdMinutes: intEnv("IDLE_THRESHOLD_MINUTES", 5),
-		PollIntervalSeconds:  intEnv("POLL_INTERVAL_SECONDS", 30),
-		DBPath:               envOrDef("DB_PATH", DefaultDBPath),
-		LogPath:              envOrDef("LOG_PATH", DefaultLogPath),
-		RetentionDays:        intEnv("RETENTION_DAYS", 3),
-		SyncTimeoutSeconds:   intEnv("SYNC_TIMEOUT_SECONDS", 30),
+		SyncAPIURL:           strPriority("SYNC_API_URL", jc.SyncAPIURL, DefaultSyncAPIURL),
+		SyncAPIKey:           strPriority("SYNC_API_KEY", jc.SyncAPIKey, DefaultSyncAPIKey),
+		MorningSyncHour:      intPriority("MORNING_SYNC_HOUR", jc.MorningSyncHour, 6),
+		EveningSyncHour:      intPriority("EVENING_SYNC_HOUR", jc.EveningSyncHour, 18),
+		EveningSyncMinute:    intPriority("EVENING_SYNC_MINUTE", jc.EveningSyncMinute, 30),
+		IdleThresholdMinutes: intPriority("IDLE_THRESHOLD_MINUTES", jc.IdleThresholdMinutes, 5),
+		PollIntervalSeconds:  intPriority("POLL_INTERVAL_SECONDS", jc.PollIntervalSeconds, 30),
+		DBPath:               strPriority("DB_PATH", jc.DBPath, DefaultDBPath),
+		LogPath:              strPriority("LOG_PATH", jc.LogPath, DefaultLogPath),
+		RetentionDays:        intPriority("RETENTION_DAYS", jc.RetentionDays, 3),
+		SyncTimeoutSeconds:   intPriority("SYNC_TIMEOUT_SECONDS", jc.SyncTimeoutSeconds, 30),
 	}
 	return cfg, cfg.validate()
 }
@@ -90,24 +127,31 @@ func (c *Config) validate() error {
 	return nil
 }
 
-func envOrDef(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+// strPriority returns: env var > jsonVal > compiled default.
+func strPriority(envKey, jsonVal, def string) string {
+	if v := os.Getenv(envKey); v != "" {
 		return v
+	}
+	if jsonVal != "" {
+		return jsonVal
 	}
 	return def
 }
 
-func intEnv(key string, def int) int {
-	s := os.Getenv(key)
-	if s == "" {
-		return def
+// intPriority returns: env var > jsonVal > compiled default.
+func intPriority(envKey string, jsonVal *int, def int) int {
+	if s := os.Getenv(envKey); s != "" {
+		n, err := strconv.Atoi(strings.TrimSpace(s))
+		if err != nil {
+			log.Printf("config: invalid int for %s, using default", envKey)
+		} else {
+			return n
+		}
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(s))
-	if err != nil {
-		log.Printf("config: invalid int for %s, using %d", key, def)
-		return def
+	if jsonVal != nil {
+		return *jsonVal
 	}
-	return n
+	return def
 }
 
 func sanitiseHostname(h string) string {

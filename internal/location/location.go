@@ -53,17 +53,18 @@ func WriteToFile(path string, info Info) error {
 const MaxLocationAge = 10 * time.Minute
 
 // ReadValidatedFromFile reads the last fix and validates it is recent enough to trust.
-// Returns a zero-value Info (no error) if the file is missing or the fix is stale.
-func ReadValidatedFromFile(path string) (Info, error) {
-	info, err := ReadFromFile(path)
+// Returns the fix and a stale flag. A stale fix is still usable (better than 0,0)
+// but callers should log a warning.
+func ReadValidatedFromFile(path string) (info Info, stale bool, err error) {
+	info, err = ReadFromFile(path)
 	if err != nil {
-		return Info{}, err
+		return Info{}, false, err
 	}
 	if info.Empty() {
-		return Info{}, nil
+		return Info{}, false, nil
 	}
 	if time.Since(info.UpdatedAt) > MaxLocationAge {
-		return Info{}, nil
+		return info, true, nil
 	}
-	return info, nil
+	return info, false, nil
 }

@@ -46,7 +46,7 @@ PROD_LDFLAGS := -ldflags "-s -w \
   -X '$(CFG_PKG).DefaultDBPath=$(DB_PATH)' \
   -X '$(CFG_PKG).DefaultLogPath=$(LOG_PATH)'"
 
-.PHONY: all build build-location sign-location build-prod clean install uninstall reload status logs tidy vet
+.PHONY: all build build-location sign-location build-prod clean install uninstall setup setup-uninstall reload status logs tidy vet
 
 # ── Default target ─────────────────────────────────────────────────────────────
 all: build sign-location
@@ -119,6 +119,13 @@ install: build sign-location
 uninstall:
 	@echo "Removing daemon (requires root)…"
 	sudo bash scripts/uninstall.sh
+
+# ── Unified Setup (curl-friendly) ──────────────────────────────────────────────
+setup: build sign-location
+	sudo bash scripts/setup.sh
+
+setup-uninstall:
+	sudo bash scripts/setup.sh --uninstall
 
 # ── Daemon management ──────────────────────────────────────────────────────────
 reload:
