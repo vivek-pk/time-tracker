@@ -12,8 +12,8 @@
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-# Override RELEASE_URL to point to your GitHub Releases / internal CDN.
-RELEASE_URL="${RELEASE_URL:-}"
+# Defaults to downloading from the GitHub release page
+RELEASE_URL="${RELEASE_URL:-https://github.com/vivek-pk/time-tracker/releases/latest/download}"
 VERSION="${VERSION:-latest}"
 
 BINARY_DST="/usr/local/bin/time-tracker"
@@ -312,7 +312,7 @@ do_install() {
         step_done "using local build" $S $TOTAL_STEPS "Preparing binaries"
     # Priority 2: Download from RELEASE_URL
     elif [[ -n "$RELEASE_URL" ]]; then
-        local tar_name="time-tracker-darwin-${ARCH}.tar.gz"
+        local tar_name="time-tracker-darwin-universal.tar.gz"
         if ! curl -fsSL "${RELEASE_URL}/${tar_name}" -o "$TMP_DIR/$tar_name" 2>/dev/null; then
             step_fail "download failed from ${RELEASE_URL}" $S $TOTAL_STEPS "Preparing binaries"
             exit 1

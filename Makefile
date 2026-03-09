@@ -90,19 +90,23 @@ build-amd64:
 		go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-amd64 $(CMD_PATH)
 	@echo "→ $(BIN_DIR)/$(BINARY)-amd64"
 
-# Universal binary (runs natively on both Apple Silicon and Intel).
 build-universal:
-	@echo "Building universal binary…"
+	@echo "Building universal binaries (arm64 + amd64)…"
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=arm64 \
-		go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-arm64 $(CMD_PATH)
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=amd64 \
-		go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-amd64 $(CMD_PATH)
-	lipo -create -output $(BIN_DIR)/$(BINARY)-universal \
-		$(BIN_DIR)/$(BINARY)-arm64 \
-		$(BIN_DIR)/$(BINARY)-amd64
-	@rm -f $(BIN_DIR)/$(BINARY)-arm64 $(BIN_DIR)/$(BINARY)-amd64
-	@echo "→ $(BIN_DIR)/$(BINARY)-universal"
+	# Compile ARM64
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=arm64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-arm64 $(CMD_PATH)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=arm64 go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-arm64 $(LOC_CMD_PATH)
+	# Compile AMD64
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=amd64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-amd64 $(CMD_PATH)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=amd64 go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-amd64 $(LOC_CMD_PATH)
+	# Lipo into single universal binaries
+	lipo -create -output $(BIN_DIR)/$(BINARY) $(BIN_DIR)/$(BINARY)-arm64 $(BIN_DIR)/$(BINARY)-amd64
+	lipo -create -output $(BIN_DIR)/$(LOC_BINARY) $(BIN_DIR)/$(LOC_BINARY)-arm64 $(BIN_DIR)/$(LOC_BINARY)-amd64
+	@rm -f $(BIN_DIR)/$(BINARY)-arm64 $(BIN_DIR)/$(BINARY)-amd64 $(BIN_DIR)/$(LOC_BINARY)-arm64 $(BIN_DIR)/$(LOC_BINARY)-amd64
+	@echo "Signing universal location helper…"
+	@bash scripts/make-location-app.sh $(BIN_DIR)/$(LOC_BINARY) >/dev/null
+	@echo "→ $(BIN_DIR)/$(BINARY) (Universal)"
+	@echo "→ $(BIN_DIR)/$(LOC_BINARY) (Universal, Signed)"
 
 # ── Dependency management ──────────────────────────────────────────────────────
 tidy:
