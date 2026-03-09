@@ -667,6 +667,11 @@ do_uninstall() {
 main() {
     local action="install"
 
+    # Handle `bash -c "..." --uninstall` where it gets assigned to $0
+    if [[ "$0" == "--uninstall" || "$0" == "uninstall" || "$0" == "-u" ]]; then
+        action="uninstall"
+    fi
+
     for arg in "$@"; do
         case "$arg" in
             --uninstall|uninstall|-u)
