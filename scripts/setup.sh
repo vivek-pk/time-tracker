@@ -301,14 +301,14 @@ do_install() {
     TMP_DIR=$(mktemp -d)
     trap "rm -rf '$TMP_DIR'" EXIT
 
-    local BINARY_SRC="" LOC_SRC=""
+    local BINARY_SRC="" LOC_APP_SRC=""
 
     # Priority 1: Binaries next to this script (local repo build)
     local SCRIPT_DIR
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
-    if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/../bin/time-tracker" && -f "$SCRIPT_DIR/../bin/time-tracker-location" ]]; then
+    if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/../bin/time-tracker" && -d "$SCRIPT_DIR/../bin/time-tracker-location.app" ]]; then
         BINARY_SRC="$SCRIPT_DIR/../bin/time-tracker"
-        LOC_SRC="$SCRIPT_DIR/../bin/time-tracker-location"
+        LOC_APP_SRC="$SCRIPT_DIR/../bin/time-tracker-location.app"
         step_done "using local build" $S $TOTAL_STEPS "Preparing binaries"
     # Priority 2: Download from RELEASE_URL
     elif [[ -n "$RELEASE_URL" ]]; then
@@ -319,14 +319,14 @@ do_install() {
         fi
         tar -xzf "$TMP_DIR/$tar_name" -C "$TMP_DIR" 2>/dev/null
         BINARY_SRC="$TMP_DIR/time-tracker"
-        LOC_SRC="$TMP_DIR/time-tracker-location"
-        if [[ ! -f "$BINARY_SRC" || ! -f "$LOC_SRC" ]]; then
+        LOC_APP_SRC="$TMP_DIR/time-tracker-location.app"
+        if [[ ! -f "$BINARY_SRC" || ! -d "$LOC_APP_SRC" ]]; then
             step_fail "archive missing binaries" $S $TOTAL_STEPS "Preparing binaries"
             exit 1
         fi
         step_done "downloaded $VERSION" $S $TOTAL_STEPS "Preparing binaries"
     # Priority 3: Already installed? (upgrade path)
-    elif [[ -f "$BINARY_DST" && -f "$LOC_DST" ]]; then
+    elif [[ -f "$BINARY_DST" && -d "/Applications/time-tracker-location.app" ]]; then
         step_warn "no RELEASE_URL set — keeping existing binaries" $S $TOTAL_STEPS "Preparing binaries"
         BINARY_SRC="" # skip copy
     else
@@ -362,70 +362,21 @@ do_install() {
     S=5
     step_start $S $TOTAL_STEPS "Installing location helper..."
     sleep 0.3
-    if [[ -n "${LOC_SRC:-}" ]]; then
-        cp "$LOC_SRC" "$LOC_DST"
-        chown root:wheel "$LOC_DST"
-        chmod 755 "$LOC_DST"
+    local LOC_APP_DIR="/Applications/time-tracker-location.app"
+    if [[ -n "$BINARY_SRC" ]]; then
+        rm -rf "$LOC_APP_DIR" 2>/dev/null || true
+        cp -R "$LOC_APP_SRC" "$LOC_APP_DIR"
+        # We re-apply an ad-hoc deep signature to match the exact identity of the host CPU's cdhash
+        # If Xcode tools are not installed, it fails gracefully and uses the pre-built signature! 
+        codesign -f -s - --deep "$LOC_APP_DIR" 2>/dev/null || true
     fi
-    step_done "$LOC_DST" $S $TOTAL_STEPS "Installing location helper"
+    step_done "/Applications" $S $TOTAL_STEPS "Installing location helper"
 
     # ── Step 6: Request location permission ──
     S=6
     step_start $S $TOTAL_STEPS "Requesting location permission..."
     kill "$SPIN_PID" 2>/dev/null; wait "$SPIN_PID" 2>/dev/null || true
     clear_line
-
-    local LOC_APP_DIR="/Applications/time-tracker-location.app"
-    local LOC_APP_CONTENTS="$LOC_APP_DIR/Contents"
-    local LOC_APP_MACOS="$LOC_APP_CONTENTS/MacOS"
-    local LOC_ENTITLEMENTS="/tmp/time-tracker-loc-entitlements.plist"
-
-    # Create app bundle
-    rm -rf "$LOC_APP_DIR" 2>/dev/null || true
-    mkdir -p "$LOC_APP_MACOS"
-    cp "$LOC_DST" "$LOC_APP_MACOS/time-tracker-location"
-
-    # Write Info.plist into bundle
-    cat > "$LOC_APP_CONTENTS/Info.plist" << 'LOCPLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleIdentifier</key>
-    <string>com.timetracker.locationhelper</string>
-    <key>CFBundleName</key>
-    <string>time-tracker-location</string>
-    <key>CFBundleExecutable</key>
-    <string>time-tracker-location</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Coddle records your location at the start of each work session for attendance purposes.</string>
-    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>Coddle records your location at the start of each work session for attendance purposes.</string>
-</dict>
-</plist>
-LOCPLIST
-
-    # Write entitlements
-    cat > "$LOC_ENTITLEMENTS" << 'ENTPLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>com.apple.security.personal-information.location</key>
-    <true/>
-</dict>
-</plist>
-ENTPLIST
-
-    # Sign the bundle (ad-hoc)
-    codesign -f -s - --entitlements "$LOC_ENTITLEMENTS" "$LOC_APP_DIR" 2>/dev/null
-
-    # Copy signed binary back so standalone and bundle share the same cdhash
-    cp -f "$LOC_APP_MACOS/time-tracker-location" "$LOC_DST"
 
     local CURRENT_USER
     CURRENT_USER=$(stat -f '%Su' /dev/console 2>/dev/null) || CURRENT_USER=""
