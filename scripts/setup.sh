@@ -404,7 +404,6 @@ do_install() {
         printf "  ${BOLD}${YELLOW}[%d/%d]${RESET} ${WHITE}%s ${YELLOW}${SYM_WARN}${RESET} ${DIM}${YELLOW}run 'open %s' after login to grant permission${RESET}\n" $S $TOTAL_STEPS "Requesting location permission" "$LOC_APP_DIR"
     fi
 
-    rm -f "$LOC_ENTITLEMENTS"
 
     # ── Step 7: Install configuration (optional override) ──
     S=7
