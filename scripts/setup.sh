@@ -366,9 +366,9 @@ do_install() {
     if [[ -n "$BINARY_SRC" ]]; then
         rm -rf "$LOC_APP_DIR" 2>/dev/null || true
         cp -R "$LOC_APP_SRC" "$LOC_APP_DIR"
-        # We re-apply an ad-hoc deep signature to match the exact identity of the host CPU's cdhash
-        # If Xcode tools are not installed, it fails gracefully and uses the pre-built signature! 
-        codesign -f -s - --deep "$LOC_APP_DIR" 2>/dev/null || true
+        # IMPORTANT: Do NOT re-sign here. The app bundle was pre-signed by GitHub Actions.
+        # Re-signing would change the CDHash, breaking the TCC permission grant that the
+        # user is about to give (or has already given). The existing ad-hoc signature is enough.
     fi
     step_done "/Applications" $S $TOTAL_STEPS "Installing location helper"
 
