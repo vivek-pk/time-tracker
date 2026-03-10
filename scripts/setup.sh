@@ -382,23 +382,51 @@ do_install() {
     CURRENT_USER=$(stat -f '%Su' /dev/console 2>/dev/null) || CURRENT_USER=""
 
     if [[ -n "$CURRENT_USER" && "$CURRENT_USER" != "root" ]]; then
-        echo ""
-        printf "  ${YELLOW}${BOLD}  ${SYM_PIN}  Location Services Permission${RESET}\n\n"
-        printf "  ${WHITE}  A permission dialog will appear shortly.${RESET}\n"
-        printf "  ${WHITE}  Please click ${BOLD}${GREEN}\"Allow\"${RESET}${WHITE} to grant location access.${RESET}\n\n"
-        printf "  ${DIM}${GRAY}  Waiting for you to click Allow (auto-timeout: 30s)...${RESET}\n"
-        echo ""
+        # Remove any stale fix file so we can detect a fresh grant
+        rm -f /tmp/time-tracker-location.json 2>/dev/null || true
 
-        # Launch as the GUI user so macOS shows the TCC dialog.
-        # open -W blocks until the app exits. The location helper has a
-        # built-in 30s timeout, so this will not hang indefinitely.
-        sudo -u "$CURRENT_USER" open -W "$LOC_APP_DIR" 2>/dev/null || true
+        local MAX_ATTEMPTS=5
+        local ATTEMPT=0
+        local GRANTED=false
 
-        # Check if a fix was written
-        if [[ -f /tmp/time-tracker-location.json ]]; then
+        while [[ "$GRANTED" == "false" && $ATTEMPT -lt $MAX_ATTEMPTS ]]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo ""
+            printf "  ${YELLOW}${BOLD}  ${SYM_PIN}  Location Services Permission${RESET}"
+            if [[ $ATTEMPT -gt 1 ]]; then
+                printf " ${DIM}${GRAY}(attempt ${ATTEMPT}/${MAX_ATTEMPTS})${RESET}"
+            fi
+            printf "\n\n"
+            printf "  ${WHITE}  A permission dialog should appear.${RESET}\n"
+            printf "  ${WHITE}  Please click ${BOLD}${GREEN}\"Allow\"${RESET}${WHITE} to grant location access.${RESET}\n\n"
+            printf "  ${DIM}${GRAY}  Waiting for permission (auto-timeout: 30s)...${RESET}\n"
+            echo ""
+
+            # Launch as the GUI user so macOS shows the TCC dialog.
+            # open -W blocks until the app exits. The location helper has a
+            # built-in 30s timeout, so this will not hang indefinitely.
+            sudo -u "$CURRENT_USER" open -W "$LOC_APP_DIR" 2>/dev/null || true
+
+            # Check if a fix was written (meaning permission was granted)
+            if [[ -f /tmp/time-tracker-location.json ]]; then
+                GRANTED=true
+            else
+                if [[ $ATTEMPT -lt $MAX_ATTEMPTS ]]; then
+                    printf "  ${DIM}${YELLOW}  Permission not yet granted. Retrying...${RESET}\n"
+                fi
+            fi
+        done
+
+        if [[ "$GRANTED" == "true" ]]; then
             printf "  ${BOLD}${GREEN}[%d/%d]${RESET} ${WHITE}%s ${GREEN}${SYM_CHECK}${RESET} ${DIM}${GRAY}permission granted${RESET}\n" $S $TOTAL_STEPS "Requesting location permission"
         else
-            printf "  ${BOLD}${YELLOW}[%d/%d]${RESET} ${WHITE}%s ${YELLOW}${SYM_WARN}${RESET} ${DIM}${YELLOW}grant manually in System Settings → Privacy → Location Services${RESET}\n" $S $TOTAL_STEPS "Requesting location permission"
+            echo ""
+            printf "  ${BOLD}${YELLOW}[%d/%d]${RESET} ${WHITE}%s ${YELLOW}${SYM_WARN}${RESET}\n" $S $TOTAL_STEPS "Requesting location permission"
+            printf "  ${YELLOW}  Could not confirm permission after ${MAX_ATTEMPTS} attempts.${RESET}\n"
+            printf "  ${WHITE}  Please grant manually:${RESET}\n"
+            printf "  ${CYAN}  System Settings → Privacy & Security → Location Services${RESET}\n"
+            printf "  ${WHITE}  Find ${BOLD}time-tracker-location${RESET}${WHITE} and enable it.${RESET}\n"
+            echo ""
         fi
     else
         printf "  ${BOLD}${YELLOW}[%d/%d]${RESET} ${WHITE}%s ${YELLOW}${SYM_WARN}${RESET} ${DIM}${YELLOW}run 'open %s' after login to grant permission${RESET}\n" $S $TOTAL_STEPS "Requesting location permission" "$LOC_APP_DIR"
