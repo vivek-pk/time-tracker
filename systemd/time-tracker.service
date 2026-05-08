@@ -1,0 +1,25 @@
+[Unit]
+Description=Time Tracker — Activity Monitoring Daemon
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/time-tracker
+EnvironmentFile=-/etc/time-tracker/.env
+Environment=ENV_FILE=/etc/time-tracker/.env
+Restart=always
+RestartSec=10
+Nice=10
+StandardOutput=append:/var/log/time-tracker/output.log
+StandardError=append:/var/log/time-tracker/error.log
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/time-tracker /var/log/time-tracker /tmp
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target

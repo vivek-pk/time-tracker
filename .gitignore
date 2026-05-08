@@ -1,6 +1,7 @@
 # Binaries
 bin/
 *.app/
+*.exe
 
 # Environment (contains secrets)
 .env
@@ -8,6 +9,9 @@ bin/
 
 # macOS
 .DS_Store
+
+# Windows
+Thumbs.db
 
 # IDE
 .idea/

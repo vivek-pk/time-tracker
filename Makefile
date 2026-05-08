@@ -2,15 +2,21 @@
 #
 # Typical workflow on a fresh machine:
 #
-#   make build          # compile the binary
-#   sudo make install   # install binary + plist, load daemon
+#   make build          # compile the binary (auto-detects OS)
+#   sudo make install   # install binary + service (macOS/Linux)
 #
-# Targets that touch /Library/LaunchDaemons require sudo.
+# Cross-compile for other platforms:
+#
+#   make build-linux    # Linux amd64
+#   make build-windows  # Windows amd64
+#   make build-all      # All platforms
 
 # ── Variables ──────────────────────────────────────────────────────────────────
 BINARY       := time-tracker
 BIN_DIR      := ./bin
 CMD_PATH     := ./cmd/tracker
+LOC_LINUX_CMD := ./cmd/location-helper-linux
+LOC_WIN_CMD   := ./cmd/location-helper-windows
 PLIST_LABEL  := com.timetracker.daemon
 PLIST_DST    := /Library/LaunchDaemons/$(PLIST_LABEL).plist
 INSTALL_DST  := /usr/local/bin/$(BINARY)
@@ -25,19 +31,29 @@ LOC_INFO_PLIST  := ./entitlements/location-helper-info.plist
 # Embed Info.plist so macOS TCC can show the location permission dialog.
 LOC_LDFLAGS := -ldflags "-s -w -extldflags '-sectcreate __TEXT __info_plist $(CURDIR)/$(LOC_INFO_PLIST)'"
 
-# CGo is required for the macOS IOKit idle-time probe.
-CGO_ENABLED := 1
-GOOS        := darwin
-GOARCH      ?= arm64          # override with GOARCH=amd64 for Intel Macs
-
 LDFLAGS := -ldflags "-s -w"   # strip debug info → smaller binary
+
+# Auto-detect host OS and architecture for native builds
+HOST_OS    := $(shell go env GOOS)
+HOST_ARCH  := $(shell go env GOARCH)
+
+# CGo is required on macOS (IOKit idle-time probe, IOKit serial number).
+# Windows and Linux idle detection are pure Go — no CGo needed.
+ifeq ($(HOST_OS),darwin)
+  CGO_ENABLED := 1
+else
+  CGO_ENABLED := 0
+endif
+
+GOOS   ?= $(HOST_OS)
+GOARCH ?= $(HOST_ARCH)
 
 # Values baked into the binary at build time (no .env file needed on target).
 # Usage: make build-prod SYNC_API_URL=https://... SYNC_API_KEY=mytoken
 SYNC_API_URL ?=
 SYNC_API_KEY ?=
-DB_PATH      ?= /var/lib/time-tracker/tracker.db
-LOG_PATH     ?= /var/log/time-tracker
+DB_PATH      ?=
+LOG_PATH     ?=
 
 CFG_PKG := github.com/vivek/time-tracker/internal/config
 PROD_LDFLAGS := -ldflags "-s -w \
@@ -46,24 +62,76 @@ PROD_LDFLAGS := -ldflags "-s -w \
   -X '$(CFG_PKG).DefaultDBPath=$(DB_PATH)' \
   -X '$(CFG_PKG).DefaultLogPath=$(LOG_PATH)'"
 
-.PHONY: all build build-location sign-location build-prod clean install uninstall setup setup-uninstall reload status logs tidy vet
+.PHONY: all build build-location sign-location build-prod clean install uninstall \
+        setup setup-uninstall reload status logs tidy vet \
+        build-linux build-windows build-all build-amd64 build-universal
 
 # ── Default target ─────────────────────────────────────────────────────────────
+ifeq ($(HOST_OS),darwin)
 all: build sign-location
+else
+all: build
+endif
 
-# ── Build ──────────────────────────────────────────────────────────────────────
+# ── Build (auto-detects host OS) ──────────────────────────────────────────────
 build:
-	@echo "Building $(BINARY) (GOARCH=$(GOARCH))…"
+	@echo "Building $(BINARY) (GOOS=$(GOOS) GOARCH=$(GOARCH))…"
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) \
-		go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) $(CMD_PATH)
-	@echo "→ $(BIN_DIR)/$(BINARY)"
+		go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)$(if $(filter windows,$(GOOS)),.exe,) $(CMD_PATH)
+	@echo "→ $(BIN_DIR)/$(BINARY)$(if $(filter windows,$(GOOS)),.exe,)"
+
+# ── Cross-platform builds ────────────────────────────────────────────────────
+build-linux:
+	@echo "Building $(BINARY) (linux/amd64)…"
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+		go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-linux-amd64 $(CMD_PATH)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+		go build $(LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-linux-amd64 $(LOC_LINUX_CMD)
+	@echo "→ $(BIN_DIR)/$(BINARY)-linux-amd64"
+	@echo "→ $(BIN_DIR)/$(LOC_BINARY)-linux-amd64"
+
+build-linux-arm64:
+	@echo "Building $(BINARY) (linux/arm64)…"
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+		go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-linux-arm64 $(CMD_PATH)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+		go build $(LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-linux-arm64 $(LOC_LINUX_CMD)
+	@echo "→ $(BIN_DIR)/$(BINARY)-linux-arm64"
+	@echo "→ $(BIN_DIR)/$(LOC_BINARY)-linux-arm64"
+
+build-windows:
+	@echo "Building $(BINARY) (windows/amd64)…"
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+		go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-windows-amd64.exe $(CMD_PATH)
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+		go build $(LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-windows-amd64.exe $(LOC_WIN_CMD)
+	@echo "→ $(BIN_DIR)/$(BINARY)-windows-amd64.exe"
+	@echo "→ $(BIN_DIR)/$(LOC_BINARY)-windows-amd64.exe"
+
+build-windows-arm64:
+	@echo "Building $(BINARY) (windows/arm64)…"
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 \
+		go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-windows-arm64.exe $(CMD_PATH)
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 \
+		go build $(LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-windows-arm64.exe $(LOC_WIN_CMD)
+	@echo "→ $(BIN_DIR)/$(BINARY)-windows-arm64.exe"
+	@echo "→ $(BIN_DIR)/$(LOC_BINARY)-windows-arm64.exe"
+
+build-all: build build-linux build-linux-arm64 build-windows build-windows-arm64
+	@echo "All platform builds complete."
+
+# ── macOS-specific targets ────────────────────────────────────────────────────
 
 # Location helper: runs as a user LaunchAgent to capture GPS via CoreLocation.
 build-location:
 	@echo "Building $(LOC_BINARY) (GOARCH=$(GOARCH))…"
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) \
+	CGO_ENABLED=1 GOOS=darwin GOARCH=$(GOARCH) \
 		go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY) $(LOC_CMD_PATH)
 	@echo "→ $(BIN_DIR)/$(LOC_BINARY) (unsigned; run scripts/make-location-app.sh to sign)"
 
@@ -76,17 +144,17 @@ sign-location: build-location
 # Production build: bakes SYNC_API_URL / SYNC_API_KEY / paths into the binary.
 # The binary works without any .env file on the target machine.
 build-prod:
-	@echo "Building $(BINARY) (prod, GOARCH=$(GOARCH))…"
+	@echo "Building $(BINARY) (prod, GOOS=$(GOOS) GOARCH=$(GOARCH))…"
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) \
-		go build $(PROD_LDFLAGS) -o $(BIN_DIR)/$(BINARY) $(CMD_PATH)
-	@echo "→ $(BIN_DIR)/$(BINARY)"
+		go build $(PROD_LDFLAGS) -o $(BIN_DIR)/$(BINARY)$(if $(filter windows,$(GOOS)),.exe,) $(CMD_PATH)
+	@echo "→ $(BIN_DIR)/$(BINARY)$(if $(filter windows,$(GOOS)),.exe,)"
 
 # Cross-compile for Intel Mac (useful when packaging on Apple Silicon).
 build-amd64:
 	@echo "Building $(BINARY) (GOARCH=amd64)…"
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=amd64 \
+	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 \
 		go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-amd64 $(CMD_PATH)
 	@echo "→ $(BIN_DIR)/$(BINARY)-amd64"
 
@@ -94,11 +162,11 @@ build-universal:
 	@echo "Building universal binaries (arm64 + amd64)…"
 	@mkdir -p $(BIN_DIR)
 	# Compile ARM64
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=arm64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-arm64 $(CMD_PATH)
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=arm64 go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-arm64 $(LOC_CMD_PATH)
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-arm64 $(CMD_PATH)
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-arm64 $(LOC_CMD_PATH)
 	# Compile AMD64
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=amd64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-amd64 $(CMD_PATH)
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=amd64 go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-amd64 $(LOC_CMD_PATH)
+	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-amd64 $(CMD_PATH)
+	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-amd64 $(LOC_CMD_PATH)
 	# Lipo into single universal binaries
 	lipo -create -output $(BIN_DIR)/$(BINARY) $(BIN_DIR)/$(BINARY)-arm64 $(BIN_DIR)/$(BINARY)-amd64
 	lipo -create -output $(BIN_DIR)/$(LOC_BINARY) $(BIN_DIR)/$(LOC_BINARY)-arm64 $(BIN_DIR)/$(LOC_BINARY)-amd64
@@ -115,23 +183,43 @@ tidy:
 vet:
 	go vet ./...
 
-# ── Install / uninstall ────────────────────────────────────────────────────────
+# ── Install / uninstall (platform-aware) ──────────────────────────────────────
+ifeq ($(HOST_OS),darwin)
 install: build sign-location
 	@echo "Installing daemon (requires root)…"
 	sudo bash scripts/install.sh $(BIN_DIR)/$(BINARY) $(BIN_DIR)/$(LOC_BINARY)
+else ifeq ($(HOST_OS),linux)
+install: build
+	@echo "Installing service (requires root)…"
+	sudo bash scripts/install-linux.sh $(BIN_DIR)/$(BINARY)
+else
+install:
+	@echo "On Windows, run scripts\\install-windows.ps1 as Administrator."
+	@echo "See README.md for instructions."
+endif
 
+ifeq ($(HOST_OS),darwin)
 uninstall:
 	@echo "Removing daemon (requires root)…"
 	sudo bash scripts/uninstall.sh
+else ifeq ($(HOST_OS),linux)
+uninstall:
+	@echo "Removing service (requires root)…"
+	sudo bash scripts/uninstall-linux.sh
+else
+uninstall:
+	@echo "On Windows, run scripts\\uninstall-windows.ps1 as Administrator."
+endif
 
-# ── Unified Setup (curl-friendly) ──────────────────────────────────────────────
+# ── Unified Setup (curl-friendly, macOS only) ─────────────────────────────────
 setup: build sign-location
 	sudo bash scripts/setup.sh
 
 setup-uninstall:
 	sudo bash scripts/setup.sh --uninstall
 
-# ── Daemon management ──────────────────────────────────────────────────────────
+# ── Daemon management (platform-aware) ────────────────────────────────────────
+ifeq ($(HOST_OS),darwin)
 reload:
 	@echo "Reloading daemon…"
 	sudo launchctl unload $(PLIST_DST) 2>/dev/null || true
@@ -149,6 +237,30 @@ logs:
 
 logs-err:
 	@tail -f /var/log/time-tracker/error.log
+
+else ifeq ($(HOST_OS),linux)
+reload:
+	@echo "Reloading service…"
+	sudo systemctl daemon-reload
+	sudo systemctl restart time-tracker
+
+stop:
+	@echo "Stopping service…"
+	sudo systemctl stop time-tracker
+
+status:
+	@systemctl status time-tracker --no-pager || true
+
+logs:
+	@journalctl -u time-tracker -f
+
+logs-err:
+	@journalctl -u time-tracker -p err -f
+
+else
+reload stop status logs logs-err:
+	@echo "Use Windows Service Manager (services.msc) to manage the time-tracker service."
+endif
 
 # ── Dev helpers ────────────────────────────────────────────────────────────────
 # Run locally (reads .env from the current directory).

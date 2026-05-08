@@ -6,11 +6,11 @@ on:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
 jobs:
-  build-and-release:
+  # ── macOS: Universal binary (arm64 + amd64) with location helper ────────────
+  build-macos:
     runs-on: macos-latest
     permissions:
       contents: write
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -18,20 +18,124 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24.0' # Matches your project
+        go-version: '1.24.0'
 
     - name: Build binaries (macOS Universal)
       run: |
         make build-universal
-        
-        # Package a single universal tarball that works on all Macs
         tar -czf time-tracker-darwin-universal.tar.gz -C bin time-tracker time-tracker-location.app
+
+    - name: Upload macOS artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-build
+        path: |
+          time-tracker-darwin-universal.tar.gz
+          scripts/setup.sh
+
+  # ── Linux: amd64 + arm64 ────────────────────────────────────────────────────
+  build-linux:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.0'
+
+    - name: Build Linux amd64
+      run: make build-linux
+
+    - name: Build Linux arm64
+      run: make build-linux-arm64
+
+    - name: Package Linux binaries
+      run: |
+        # Package amd64
+        tar -czf time-tracker-linux-amd64.tar.gz \
+          -C bin time-tracker-linux-amd64 time-tracker-location-linux-amd64 \
+          -C .. systemd/time-tracker.service scripts/install-linux.sh scripts/uninstall-linux.sh
+        # Package arm64
+        tar -czf time-tracker-linux-arm64.tar.gz \
+          -C bin time-tracker-linux-arm64 time-tracker-location-linux-arm64 \
+          -C .. systemd/time-tracker.service scripts/install-linux.sh scripts/uninstall-linux.sh
+
+    - name: Upload Linux artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-build
+        path: |
+          time-tracker-linux-amd64.tar.gz
+          time-tracker-linux-arm64.tar.gz
+          scripts/setup-linux.sh
+
+  # ── Windows: amd64 + arm64 ──────────────────────────────────────────────────
+  build-windows:
+    runs-on: ubuntu-latest  # Cross-compile from Linux (no CGo needed)
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.0'
+
+    - name: Build Windows amd64
+      run: make build-windows
+
+    - name: Build Windows arm64
+      run: make build-windows-arm64
+
+    - name: Package Windows binaries
+      run: |
+        cd bin
+        zip ../time-tracker-windows-amd64.zip time-tracker-windows-amd64.exe time-tracker-location-windows-amd64.exe
+        zip ../time-tracker-windows-arm64.zip time-tracker-windows-arm64.exe time-tracker-location-windows-arm64.exe
+        cd ..
+        # Add install scripts to the zip files
+        zip time-tracker-windows-amd64.zip scripts/install-windows.ps1 scripts/uninstall-windows.ps1
+        zip time-tracker-windows-arm64.zip scripts/install-windows.ps1 scripts/uninstall-windows.ps1
+
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-build
+        path: |
+          time-tracker-windows-amd64.zip
+          time-tracker-windows-arm64.zip
+          scripts/setup.ps1
+
+  # ── Create GitHub Release with all platform binaries ────────────────────────
+  release:
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        merge-multiple: true
 
     - name: Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           time-tracker-darwin-universal.tar.gz
+          time-tracker-linux-amd64.tar.gz
+          time-tracker-linux-arm64.tar.gz
+          time-tracker-windows-amd64.zip
+          time-tracker-windows-arm64.zip
+          scripts/setup.sh
+          scripts/setup.ps1
+          scripts/setup-linux.sh
         draft: false
         generate_release_notes: true
       env:

@@ -19,9 +19,14 @@ import (
 var (
 	DefaultSyncAPIURL = ""
 	DefaultSyncAPIKey = ""
-	DefaultDBPath     = "/var/lib/time-tracker/tracker.db"
-	DefaultLogPath    = "/var/log/time-tracker"
+	DefaultDBPath     = "" // Set per-platform in paths_*.go init()
+	DefaultLogPath    = "" // Set per-platform in paths_*.go init()
 )
+
+// DefaultEnvFilePath returns the OS-specific default location for the .env file.
+func DefaultEnvFilePath() string {
+	return defaultEnvFilePath()
+}
 
 // embeddedConfigJSON is the config.json file baked into the binary at build time.
 // Edit internal/config/config.json with your API URL and key before building.

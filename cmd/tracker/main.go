@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	envFile := envOrDefault("ENV_FILE", "/etc/time-tracker/.env")
+	envFile := envOrDefault("ENV_FILE", config.DefaultEnvFilePath())
 
 	cfg, err := config.Load(envFile)
 	if err != nil {
