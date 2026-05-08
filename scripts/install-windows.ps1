@@ -79,12 +79,28 @@ if ($svc.Status -eq 'Running') {
     Write-Host ('  [!] Logs: {0}\' -f $LogDir)
 }
 
+# -- Read Machine ID (same logic as the Go binary) ----------------------------
+$machineId = ""
+try {
+    $regKey = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Cryptography" -Name "MachineGuid" -ErrorAction Stop
+    $machineId = $regKey.MachineGuid
+} catch {
+    $machineId = $env:COMPUTERNAME
+}
+
 Write-Host ''
+Write-Host '==========================================================='
 Write-Host 'Installation complete.'
+Write-Host '==========================================================='
+Write-Host ''
+Write-Host ('  Machine ID  : {0}' -f $machineId)
 Write-Host '  Config      : embedded in binary (config.json at build time)'
 Write-Host ('  Database    : {0}\tracker.db' -f $DbDir)
 Write-Host ('  Logs        : {0}\' -f $LogDir)
 Write-Host ''
+Write-Host '  ** Copy the Machine ID above to register this machine in your HRMS **'
+Write-Host ''
 Write-Host ('To check status: Get-Service {0}' -f $ServiceName)
 Write-Host ('To view logs:    Get-Content "{0}\output.log" -Tail 50 -Wait' -f $LogDir)
+
 
