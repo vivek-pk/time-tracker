@@ -74,20 +74,16 @@ $settings = New-ScheduledTaskSettingsSet `
     -DontStopIfGoingOnBatteries `
     -StartWhenAvailable `
     -RestartCount 999 `
-    -RestartInterval (New-TimeSpan -Seconds 30) `
-    -ExecutionTimeLimit (New-TimeSpan -Days 0)
+    -RestartInterval (New-TimeSpan -Minutes 1)
 
-# Run as SYSTEM but allow interaction with desktop is not needed;
-# instead, run as the current logged-in user's context.
-# Using SYSTEM with -RunLevel Highest ensures it auto-starts.
-$principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Users" -RunLevel Limited
+# Disable execution time limit (default is 3 days, we want unlimited)
+$settings.ExecutionTimeLimit = 'PT0S'
 
 Register-ScheduledTask `
     -TaskName $TaskName `
     -Action $action `
     -Trigger $trigger `
     -Settings $settings `
-    -Principal $principal `
     -Description $Description `
     -Force | Out-Null
 
