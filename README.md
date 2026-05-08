@@ -326,7 +326,7 @@ The easiest way to install on Windows — downloads the latest release, extracts
 Open **PowerShell as Administrator** and run:
 
 ```powershell
-Invoke-Expression (Invoke-RestMethod -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1")
+$f="$env:TEMP\tt-setup.ps1"; Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1" -OutFile $f; & $f; Remove-Item $f
 ```
 
 This script will automatically:
