@@ -124,6 +124,15 @@ jobs:
       with:
         merge-multiple: true
 
+    - name: Flatten setup scripts
+      run: |
+        # Move setup scripts from scripts/ to root so release asset names
+        # match the download URLs (e.g. setup.ps1, not scripts/setup.ps1)
+        cp scripts/setup.sh setup.sh 2>/dev/null || true
+        cp scripts/setup.ps1 setup.ps1 2>/dev/null || true
+        cp scripts/setup-linux.sh setup-linux.sh 2>/dev/null || true
+        ls -la
+
     - name: Release
       uses: softprops/action-gh-release@v2
       with:
@@ -133,9 +142,9 @@ jobs:
           time-tracker-linux-arm64.tar.gz
           time-tracker-windows-amd64.zip
           time-tracker-windows-arm64.zip
-          scripts/setup.sh
-          scripts/setup.ps1
-          scripts/setup-linux.sh
+          setup.sh
+          setup.ps1
+          setup-linux.sh
         draft: false
         generate_release_notes: true
       env:
