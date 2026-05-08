@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -27,6 +28,18 @@ func runTracker(stopCh chan struct{}) {
 	log.SetPrefix("[time-tracker] ")
 
 	_ = os.MkdirAll(cfg.LogPath, 0o750)
+
+	// Open a log file so output is captured even when stderr is unavailable
+	// (e.g. Windows Services). Writes go to both stderr and the file.
+	logFile, logErr := os.OpenFile(
+		filepath.Join(cfg.LogPath, "output.log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+		0o644,
+	)
+	if logErr == nil {
+		log.SetOutput(io.MultiWriter(os.Stderr, logFile))
+		defer logFile.Close()
+	}
 
 	log.Printf("starting machine=%s db=%s", cfg.MachineID, cfg.DBPath)
 
