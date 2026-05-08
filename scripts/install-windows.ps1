@@ -63,29 +63,34 @@ Copy-Item -Path $BinaryPath -Destination $BinaryDst -Force
 # Runs in the user's desktop session (NOT Session 0) so idle detection works.
 Write-Host '  [+] Creating scheduled task (runs at user logon)...'
 
-$action = New-ScheduledTaskAction -Execute $BinaryDst -WorkingDirectory $InstallDir
+$taskXml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+  </Triggers>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <StartWhenAvailable>true</StartWhenAvailable>
+  </Settings>
+  <Actions>
+    <Exec>
+      <Command>$BinaryDst</Command>
+      <WorkingDirectory>$InstallDir</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+"@
 
-# Trigger: at logon of any user
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-
-# Settings: restart on failure, don't stop on idle, run indefinitely
-$settings = New-ScheduledTaskSettingsSet `
-    -AllowStartIfOnBatteries `
-    -DontStopIfGoingOnBatteries `
-    -StartWhenAvailable `
-    -RestartCount 999 `
-    -RestartInterval (New-TimeSpan -Minutes 1)
-
-# Disable execution time limit (default is 3 days, we want unlimited)
-$settings.ExecutionTimeLimit = 'PT0S'
-
-Register-ScheduledTask `
-    -TaskName $TaskName `
-    -Action $action `
-    -Trigger $trigger `
-    -Settings $settings `
-    -Description $Description `
-    -Force | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Xml $taskXml -Force | Out-Null
 
 # -- Start the task now ---------------------------------------------------
 Write-Host '  [+] Starting task...'
