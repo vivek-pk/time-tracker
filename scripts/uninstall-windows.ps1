@@ -1,4 +1,4 @@
-# uninstall-windows.ps1 - Remove the time-tracker Windows Service.
+# uninstall-windows.ps1 - Remove the time-tracker Scheduled Task and files.
 #
 # Must be run as Administrator.
 
@@ -8,7 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ServiceName = "TimeTracker"
+$TaskName    = "TimeTracker"
 $InstallDir  = "$env:ProgramData\time-tracker"
 
 # -- Admin check ---------------------------------------------------------
@@ -18,17 +18,26 @@ if (-not $isAdmin) {
     exit 1
 }
 
-# -- Stop and remove service ----------------------------------------------
-$existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($existingService) {
-    Write-Host '  [+] Stopping service...'
-    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+# -- Stop and remove scheduled task ----------------------------------------
+$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($existingTask) {
+    Write-Host '  [+] Stopping task...'
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
-    Write-Host '  [+] Removing service...'
-    sc.exe delete $ServiceName | Out-Null
-    Write-Host '  [+] Service removed'
+    Write-Host '  [+] Removing task...'
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+    Write-Host '  [+] Task removed'
 } else {
-    Write-Host ('  [!] Service ''{0}'' not found - skipping' -f $ServiceName)
+    Write-Host ('  [!] Task ''{0}'' not found - skipping' -f $TaskName)
+}
+
+# Also clean up any old Windows Service from previous installs
+$existingSvc = Get-Service -Name $TaskName -ErrorAction SilentlyContinue
+if ($existingSvc) {
+    Write-Host '  [+] Removing old Windows Service...'
+    Stop-Service -Name $TaskName -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    sc.exe delete $TaskName | Out-Null
 }
 
 # -- Remove binary --------------------------------------------------------

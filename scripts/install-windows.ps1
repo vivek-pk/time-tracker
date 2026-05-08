@@ -1,4 +1,4 @@
-# install-windows.ps1 - Install time-tracker as a Windows Service.
+# install-windows.ps1 - Install time-tracker as a Scheduled Task.
 #
 # Must be run as Administrator.
 # Usage: .\scripts\install-windows.ps1 [-BinaryPath .\bin\time-tracker.exe]
@@ -10,8 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 # -- Configuration -------------------------------------------------------
-$ServiceName = "TimeTracker"
-$DisplayName = "Time Tracker - Activity Monitor"
+$TaskName    = "TimeTracker"
 $Description = "Monitors keyboard/mouse activity and syncs attendance data."
 $InstallDir  = "$env:ProgramData\time-tracker"
 $BinaryDst   = "$InstallDir\time-tracker.exe"
@@ -31,15 +30,24 @@ if (-not (Test-Path $BinaryPath)) {
     exit 1
 }
 
-# -- Stop existing service ------------------------------------------------
-$existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($existingService) {
-    Write-Host '  [+] Stopping existing service...'
-    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-    Write-Host '  [+] Removing existing service...'
-    sc.exe delete $ServiceName | Out-Null
+# -- Stop existing task/service -------------------------------------------
+# Remove old scheduled task if it exists
+$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($existingTask) {
+    Write-Host '  [+] Stopping existing scheduled task...'
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1
+    Write-Host '  [+] Removing existing scheduled task...'
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+}
+
+# Also clean up any old Windows Service from previous installs
+$existingSvc = Get-Service -Name $TaskName -ErrorAction SilentlyContinue
+if ($existingSvc) {
+    Write-Host '  [+] Removing old Windows Service...'
+    Stop-Service -Name $TaskName -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    sc.exe delete $TaskName | Out-Null
 }
 
 # -- Create directories ---------------------------------------------------
@@ -51,32 +59,48 @@ New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 Write-Host ('  [+] Installing binary -> {0}' -f $BinaryDst)
 Copy-Item -Path $BinaryPath -Destination $BinaryDst -Force
 
-# -- Create Windows Service -----------------------------------------------
-Write-Host ('  [+] Creating Windows Service ''{0}''' -f $ServiceName)
+# -- Create Scheduled Task ------------------------------------------------
+# Runs in the user's desktop session (NOT Session 0) so idle detection works.
+Write-Host '  [+] Creating scheduled task (runs at user logon)...'
 
-# Use sc.exe to create the service with environment variable
-sc.exe create $ServiceName `
-    binPath= "$BinaryDst" `
-    start= auto `
-    DisplayName= "$DisplayName" | Out-Null
+$action = New-ScheduledTaskAction -Execute $BinaryDst -WorkingDirectory $InstallDir
 
-# Set description
-sc.exe description $ServiceName "$Description" | Out-Null
+# Trigger: at logon of any user
+$trigger = New-ScheduledTaskTrigger -AtLogOn
 
-# Set recovery: restart on failure after 10 seconds
-sc.exe failure $ServiceName reset= 86400 actions= restart/10000/restart/10000/restart/30000 | Out-Null
+# Settings: restart on failure, don't stop on idle, run indefinitely
+$settings = New-ScheduledTaskSettingsSet `
+    -AllowStartIfOnBatteries `
+    -DontStopIfGoingOnBatteries `
+    -StartWhenAvailable `
+    -RestartCount 999 `
+    -RestartInterval (New-TimeSpan -Seconds 30) `
+    -ExecutionTimeLimit (New-TimeSpan -Days 0)
 
-# -- Start service --------------------------------------------------------
-Write-Host '  [+] Starting service...'
-Start-Service -Name $ServiceName
-Start-Sleep -Seconds 2
+# Run as SYSTEM but allow interaction with desktop is not needed;
+# instead, run as the current logged-in user's context.
+# Using SYSTEM with -RunLevel Highest ensures it auto-starts.
+$principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Users" -RunLevel Limited
 
-$svc = Get-Service -Name $ServiceName
-if ($svc.Status -eq 'Running') {
-    Write-Host '  [+] Service is running'
+Register-ScheduledTask `
+    -TaskName $TaskName `
+    -Action $action `
+    -Trigger $trigger `
+    -Settings $settings `
+    -Principal $principal `
+    -Description $Description `
+    -Force | Out-Null
+
+# -- Start the task now ---------------------------------------------------
+Write-Host '  [+] Starting task...'
+Start-ScheduledTask -TaskName $TaskName
+Start-Sleep -Seconds 3
+
+$task = Get-ScheduledTask -TaskName $TaskName
+if ($task.State -eq 'Running') {
+    Write-Host '  [+] Task is running'
 } else {
-    Write-Host ('  [!] Service may not have started. Check: Get-Service {0}' -f $ServiceName)
-    Write-Host ('  [!] Logs: {0}\' -f $LogDir)
+    Write-Host ('  [!] Task state: {0}. It will start automatically at next logon.' -f $task.State)
 }
 
 # -- Read Machine ID (same logic as the Go binary) ----------------------------
@@ -100,7 +124,5 @@ Write-Host ('  Logs        : {0}\' -f $LogDir)
 Write-Host ''
 Write-Host '  ** Copy the Machine ID above to register this machine in your HRMS **'
 Write-Host ''
-Write-Host ('To check status: Get-Service {0}' -f $ServiceName)
+Write-Host ('To check status: Get-ScheduledTask -TaskName {0}' -f $TaskName)
 Write-Host ('To view logs:    Get-Content "{0}\output.log" -Tail 50 -Wait' -f $LogDir)
-
-
