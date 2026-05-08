@@ -30,12 +30,12 @@ Open **PowerShell as Administrator** (Search for PowerShell in Start Menu → Ri
 
 **Install:**
 ```powershell
-Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1").Content
+Invoke-Expression (Invoke-RestMethod -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1")
 ```
 
 **Uninstall:**
 ```powershell
-$env:TIME_TRACKER_UNINSTALL="1"; Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1").Content
+$env:TIME_TRACKER_UNINSTALL="1"; Invoke-Expression (Invoke-RestMethod -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1")
 ```
 
 **View Logs:**

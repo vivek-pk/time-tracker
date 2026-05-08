@@ -3,10 +3,10 @@
 # Install or uninstall with a single command from PowerShell (Run as Administrator):
 #
 # Install:
-#   Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1").Content
+#   Invoke-Expression (Invoke-RestMethod -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1")
 #
 # Uninstall:
-#   $env:TIME_TRACKER_UNINSTALL="1"; Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1").Content
+#   $env:TIME_TRACKER_UNINSTALL="1"; Invoke-Expression (Invoke-RestMethod -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1")
 
 $ErrorActionPreference = "Stop"
 
