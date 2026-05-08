@@ -17,6 +17,11 @@ sudo /bin/bash -c "$(curl -fsSL https://github.com/vivek-pk/time-tracker/release
 ```
 *(The uninstaller will prompt you if you want to keep or delete your local database and logs).*
 
+**View Logs:**
+```bash
+tail -f /var/log/time-tracker/output.log
+```
+
 ---
 
 ## Windows
@@ -33,6 +38,11 @@ Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/vivek-pk/time-trac
 $env:TIME_TRACKER_UNINSTALL="1"; Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.ps1").Content
 ```
 
+**View Logs:**
+```powershell
+Get-EventLog -LogName Application -Source TimeTracker -Newest 50
+```
+
 ---
 
 ## Linux
@@ -47,6 +57,11 @@ curl -fsSL https://github.com/vivek-pk/time-tracker/releases/latest/download/set
 **Uninstall:**
 ```bash
 curl -fsSL https://github.com/vivek-pk/time-tracker/releases/latest/download/setup-linux.sh | sudo bash -s -- --uninstall
+```
+
+**View Logs:**
+```bash
+journalctl -u time-tracker -f
 ```
 
 ---
