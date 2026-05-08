@@ -165,6 +165,19 @@ func (d *DB) UnsyncedForDate(date string) ([]Session, error) {
 	return scanSessions(rows)
 }
 
+// UnsyncedAll returns all closed, unsynced sessions (used by realtime sync).
+func (d *DB) UnsyncedAll() ([]Session, error) {
+	rows, err := d.db.Query(
+		`SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude
+			 FROM sessions WHERE synced = 0 AND end_time IS NOT NULL ORDER BY start_time`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanSessions(rows)
+}
+
 // UnsyncedUpToDate returns closed, unsynced sessions with date <= date.
 func (d *DB) UnsyncedUpToDate(date string) ([]Session, error) {
 	rows, err := d.db.Query(

@@ -48,6 +48,7 @@ type jsonConfig struct {
 	LogPath              string `json:"log_path,omitempty"`
 	RetentionDays        *int   `json:"retention_days,omitempty"`
 	SyncTimeoutSeconds   *int   `json:"sync_timeout_seconds,omitempty"`
+	RealtimeSync         *bool  `json:"realtime_sync,omitempty"`
 }
 
 // Config holds all runtime configuration.
@@ -64,6 +65,7 @@ type Config struct {
 	LogPath              string
 	RetentionDays        int
 	SyncTimeoutSeconds   int
+	RealtimeSync         bool
 }
 
 // Load reads config with the following priority (highest wins):
@@ -99,6 +101,7 @@ func Load(envFilePath string) (*Config, error) {
 		LogPath:              strPriority("LOG_PATH", jc.LogPath, DefaultLogPath),
 		RetentionDays:        intPriority("RETENTION_DAYS", jc.RetentionDays, 3),
 		SyncTimeoutSeconds:   intPriority("SYNC_TIMEOUT_SECONDS", jc.SyncTimeoutSeconds, 30),
+		RealtimeSync:         boolPriority("REALTIME_SYNC", jc.RealtimeSync, false),
 	}
 	return cfg, cfg.validate()
 }
@@ -152,6 +155,18 @@ func intPriority(envKey string, jsonVal *int, def int) int {
 		} else {
 			return n
 		}
+	}
+	if jsonVal != nil {
+		return *jsonVal
+	}
+	return def
+}
+
+// boolPriority returns: env var > jsonVal > compiled default.
+func boolPriority(envKey string, jsonVal *bool, def bool) bool {
+	if s := os.Getenv(envKey); s != "" {
+		s = strings.TrimSpace(strings.ToLower(s))
+		return s == "true" || s == "1" || s == "yes"
 	}
 	if jsonVal != nil {
 		return *jsonVal

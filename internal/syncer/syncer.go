@@ -59,7 +59,7 @@ func New(cfg *config.Config, db *storage.DB, mon sessionFlusher) *Syncer {
 
 // Run starts the syncer event loop.
 func (s *Syncer) Run(stopCh <-chan struct{}, wakeEvents <-chan monitor.WakeEvent) {
-	log.Println("syncer: starting")
+	log.Printf("syncer: starting (realtime=%v)", s.cfg.RealtimeSync)
 	// Check morning sync at startup — handles the case where the machine
 	// never slept (so no wake event fired) but it's already past MorningSyncHour.
 	s.handleWake(time.Now())
@@ -76,6 +76,9 @@ func (s *Syncer) Run(stopCh <-chan struct{}, wakeEvents <-chan monitor.WakeEvent
 		case now := <-ticker.C:
 			s.handleWake(now)
 			s.checkEveningSync(now)
+			if s.cfg.RealtimeSync {
+				s.realtimeSync(now)
+			}
 			if now.Minute() == 0 {
 				s.prune()
 			}
@@ -143,6 +146,24 @@ func (s *Syncer) checkEveningSync(now time.Time) {
 	s.eveningSyncedToday = today
 	yesterday := now.Local().AddDate(0, 0, -1).Format("2006-01-02")
 	s.cleanup(yesterday)
+}
+
+// realtimeSync pushes all unsynced closed sessions to the API immediately.
+func (s *Syncer) realtimeSync(now time.Time) {
+	// Flush the current open session so it becomes a closed, syncable record.
+	s.mon.FlushCurrentSession(now)
+
+	sessions, err := s.db.UnsyncedAll()
+	if err != nil {
+		log.Printf("syncer: realtime query: %v", err)
+		return
+	}
+	if len(sessions) == 0 {
+		return
+	}
+	if err := s.push("realtime", sessions); err != nil {
+		log.Printf("syncer: realtime push failed: %v", err)
+	}
 }
 
 // push sends sessions to the API with up to 3 retries.

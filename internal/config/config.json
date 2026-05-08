@@ -7,5 +7,6 @@
     "idle_threshold_minutes": 5,
     "poll_interval_seconds": 30,
     "retention_days": 15,
-    "sync_timeout_seconds": 30
+    "sync_timeout_seconds": 30,
+    "realtime_sync": true
 }
