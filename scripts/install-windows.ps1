@@ -75,7 +75,7 @@ if (Test-Path $EnvFile) {
         "# SYNC_TIMEOUT_SECONDS=30"
     ) -join "`r`n"
     $envContent | Set-Content -Path $EnvFile -Encoding UTF8
-    Write-Host ('  [!] IMPORTANT: edit {0} and set SYNC_API_URL before starting the service' -f $EnvFile)
+    Write-Host ('  [*] Config is embedded in the binary. Edit {0} ONLY to override defaults.' -f $EnvFile)
 }
 
 # -- Create Windows Service -----------------------------------------------
