@@ -35,10 +35,10 @@ if (-not (Test-Path $BinaryPath)) {
 # ── Stop existing service ─────────────────────────────────────────────────────
 $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existingService) {
-    Write-Host "  [+] Stopping existing service..."
+    Write-Host '  [+] Stopping existing service...'
     Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
-    Write-Host "  [+] Removing existing service..."
+    Write-Host '  [+] Removing existing service...'
     sc.exe delete $ServiceName | Out-Null
     Start-Sleep -Seconds 1
 }
@@ -57,23 +57,24 @@ if (Test-Path $EnvFile) {
     Write-Host ('  [!] Config {0} already exists - not overwriting.' -f $EnvFile)
 } else {
     Write-Host ('  [+] Installing default config -> {0}' -f $EnvFile)
-    @"
-# $InstallDir\.env  (OPTIONAL OVERRIDE FILE)
-# All configuration is embedded in the binary (config.json).
-# Uncomment variables below ONLY if you need to override them.
-
-# SYNC_API_URL=https://your-api-endpoint.example.com/attendance
-# SYNC_API_KEY=
-# MORNING_SYNC_HOUR=6
-# EVENING_SYNC_HOUR=18
-# EVENING_SYNC_MINUTE=30
-# IDLE_THRESHOLD_MINUTES=5
-# POLL_INTERVAL_SECONDS=30
-# DB_PATH=$InstallDir\tracker.db
-# LOG_PATH=$LogDir
-# RETENTION_DAYS=3
-# SYNC_TIMEOUT_SECONDS=30
-"@ | Set-Content -Path $EnvFile -Encoding UTF8
+    $envContent = @(
+        "# $InstallDir\.env  (OPTIONAL OVERRIDE FILE)",
+        "# All configuration is embedded in the binary (config.json).",
+        "# Uncomment variables below ONLY if you need to override them.",
+        "",
+        "# SYNC_API_URL=https://your-api-endpoint.example.com/attendance",
+        "# SYNC_API_KEY=",
+        "# MORNING_SYNC_HOUR=6",
+        "# EVENING_SYNC_HOUR=18",
+        "# EVENING_SYNC_MINUTE=30",
+        "# IDLE_THRESHOLD_MINUTES=5",
+        "# POLL_INTERVAL_SECONDS=30",
+        "# DB_PATH=$InstallDir\tracker.db",
+        "# LOG_PATH=$LogDir",
+        "# RETENTION_DAYS=3",
+        "# SYNC_TIMEOUT_SECONDS=30"
+    ) -join "`r`n"
+    $envContent | Set-Content -Path $EnvFile -Encoding UTF8
     Write-Host ('  [!] IMPORTANT: edit {0} and set SYNC_API_URL before starting the service' -f $EnvFile)
 }
 
