@@ -8,12 +8,10 @@ import (
 var (
 	user32               = syscall.NewLazyDLL("user32.dll")
 	kernel32             = syscall.NewLazyDLL("kernel32.dll")
-	wtsapi32             = syscall.NewLazyDLL("wtsapi32.dll")
 	procGetLastInputInfo = user32.NewProc("GetLastInputInfo")
 	procGetTickCount     = kernel32.NewProc("GetTickCount")
-	procWTSGetActiveConsoleSessionId = kernel32.NewProc("WTSGetActiveConsoleSessionId")
-	procWTSQuerySessionInformationW  = wtsapi32.NewProc("WTSQuerySessionInformationW")
-	procWTSFreeMemory                = wtsapi32.NewProc("WTSFreeMemory")
+	procProcessIdToSessionId = kernel32.NewProc("ProcessIdToSessionId")
+	procGetCurrentProcessId  = kernel32.NewProc("GetCurrentProcessId")
 )
 
 // lastInputInfo mirrors the Win32 LASTINPUTINFO struct.
@@ -22,46 +20,28 @@ type lastInputInfo struct {
 	dwTime uint32
 }
 
-// WTS info classes
-const (
-	wtsSessionInfoEx = 25
-	wtsSessionInfo   = 24
-)
-
 // idleSeconds returns the number of seconds since the last keyboard/mouse
 // input on Windows.
 //
-// When running as a Windows Service (Session 0), GetLastInputInfo cannot see
-// the user's desktop input. In that case we attempt to detect inactivity via
-// the active console session's idle time reported by WTS. If everything
-// fails, we return 0 (assume active) rather than reporting false idle.
+// Windows Services run in Session 0, which has no user desktop. In Session 0,
+// GetLastInputInfo may succeed but return stale data (the session never
+// receives real input), leading to permanently high idle times.
+//
+// We detect Session 0 and return 0 (assume active) to avoid false idle.
 func idleSeconds() float64 {
-	// First try the direct approach -- works when running interactively
-	// in the user's session.
-	idle := getLastInputIdle()
-	if idle >= 0 {
-		return idle
+	// Check if we are running in Session 0 (service isolation session).
+	// If so, skip idle detection entirely -- there is no user input here.
+	if isSession0() {
+		return 0
 	}
 
-	// Fallback: we're probably in Session 0 (service). Return 0 (active)
-	// to avoid false idle detection. The GetLastInputInfo approach cannot
-	// work from Session 0 because there is no user desktop attached.
-	//
-	// A more advanced approach would use a small helper process running
-	// in the user's session, but for now we default to "active" so the
-	// service doesn't falsely mark the user as idle/offline.
-	return 0
-}
-
-// getLastInputIdle uses GetLastInputInfo + GetTickCount.
-// Returns -1 if the call fails (e.g. running in Session 0).
-func getLastInputIdle() float64 {
 	var lii lastInputInfo
 	lii.cbSize = uint32(unsafe.Sizeof(lii))
 
 	r1, _, _ := procGetLastInputInfo.Call(uintptr(unsafe.Pointer(&lii)))
 	if r1 == 0 {
-		return -1
+		// GetLastInputInfo failed -- assume active to be safe.
+		return 0
 	}
 
 	r2, _, _ := procGetTickCount.Call()
@@ -71,4 +51,17 @@ func getLastInputIdle() float64 {
 	// (GetTickCount wraps every ~49.7 days).
 	idleMs := tickCount - lii.dwTime
 	return float64(idleMs) / 1000.0
+}
+
+// isSession0 returns true if the current process is running in Session 0
+// (the isolated service session with no user desktop).
+func isSession0() bool {
+	pid, _, _ := procGetCurrentProcessId.Call()
+	var sessionId uint32
+	r, _, _ := procProcessIdToSessionId.Call(pid, uintptr(unsafe.Pointer(&sessionId)))
+	if r == 0 {
+		// API call failed -- assume we're NOT in Session 0 (try normal idle detection).
+		return false
+	}
+	return sessionId == 0
 }
