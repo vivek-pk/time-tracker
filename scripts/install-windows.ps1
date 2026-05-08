@@ -44,19 +44,19 @@ if ($existingService) {
 }
 
 # ── Create directories ────────────────────────────────────────────────────────
-Write-Host "  [+] Creating directories"
+Write-Host '  [+] Creating directories'
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 
 # ── Install binary ────────────────────────────────────────────────────────────
-Write-Host "  [+] Installing binary -> $BinaryDst"
+Write-Host ('  [+] Installing binary -> {0}' -f $BinaryDst)
 Copy-Item -Path $BinaryPath -Destination $BinaryDst -Force
 
 # ── Install config ────────────────────────────────────────────────────────────
 if (Test-Path $EnvFile) {
-    Write-Host "  [!] Config $EnvFile already exists — not overwriting."
+    Write-Host ('  [!] Config {0} already exists - not overwriting.' -f $EnvFile)
 } else {
-    Write-Host "  [+] Installing default config -> $EnvFile"
+    Write-Host ('  [+] Installing default config -> {0}' -f $EnvFile)
     @"
 # $InstallDir\.env  (OPTIONAL OVERRIDE FILE)
 # All configuration is embedded in the binary (config.json).
@@ -74,11 +74,11 @@ if (Test-Path $EnvFile) {
 # RETENTION_DAYS=3
 # SYNC_TIMEOUT_SECONDS=30
 "@ | Set-Content -Path $EnvFile -Encoding UTF8
-    Write-Host "  [!] IMPORTANT: edit $EnvFile and set SYNC_API_URL before starting the service"
+    Write-Host ('  [!] IMPORTANT: edit {0} and set SYNC_API_URL before starting the service' -f $EnvFile)
 }
 
 # ── Create Windows Service ───────────────────────────────────────────────────
-Write-Host "  [+] Creating Windows Service '$ServiceName'"
+Write-Host ('  [+] Creating Windows Service ''{0}''' -f $ServiceName)
 
 # Use sc.exe to create the service with environment variable
 sc.exe create $ServiceName `
@@ -99,23 +99,23 @@ $envValue = "ENV_FILE=$EnvFile"
 Set-ItemProperty -Path $regPath -Name "Environment" -Value @($envValue) -Type MultiString
 
 # ── Start service ─────────────────────────────────────────────────────────────
-Write-Host "  [+] Starting service..."
+Write-Host '  [+] Starting service...'
 Start-Service -Name $ServiceName
 Start-Sleep -Seconds 2
 
 $svc = Get-Service -Name $ServiceName
 if ($svc.Status -eq 'Running') {
-    Write-Host "  [+] Service is running"
+    Write-Host '  [+] Service is running'
 } else {
-    Write-Host "  [!] Service may not have started. Check: Get-Service $ServiceName"
-    Write-Host "  [!] Logs: Get-EventLog -LogName Application -Source $ServiceName"
+    Write-Host ('  [!] Service may not have started. Check: Get-Service {0}' -f $ServiceName)
+    Write-Host ('  [!] Logs: Get-EventLog -LogName Application -Source {0}' -f $ServiceName)
 }
 
-Write-Host ""
-Write-Host "Installation complete."
-Write-Host "  Config file : $EnvFile"
-Write-Host "  Database    : $DbDir\tracker.db"
-Write-Host "  Logs        : $LogDir\"
-Write-Host ""
-Write-Host "Edit $EnvFile with the correct SYNC_API_URL,"
-Write-Host "then restart: Restart-Service $ServiceName"
+Write-Host ''
+Write-Host 'Installation complete.'
+Write-Host ('  Config file : {0}' -f $EnvFile)
+Write-Host ('  Database    : {0}\tracker.db' -f $DbDir)
+Write-Host ('  Logs        : {0}\' -f $LogDir)
+Write-Host ''
+Write-Host ('Edit {0} with the correct SYNC_API_URL,' -f $EnvFile)
+Write-Host ('then restart: Restart-Service {0}' -f $ServiceName)

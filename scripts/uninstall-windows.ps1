@@ -21,35 +21,35 @@ if (-not $isAdmin) {
 # ── Stop and remove service ───────────────────────────────────────────────────
 $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existingService) {
-    Write-Host "  [+] Stopping service..."
+    Write-Host '  [+] Stopping service...'
     Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
-    Write-Host "  [+] Removing service..."
+    Write-Host '  [+] Removing service...'
     sc.exe delete $ServiceName | Out-Null
-    Write-Host "  [+] Service removed"
+    Write-Host '  [+] Service removed'
 } else {
-    Write-Host "  [!] Service '$ServiceName' not found — skipping"
+    Write-Host ('  [!] Service ''{0}'' not found - skipping' -f $ServiceName)
 }
 
 # ── Remove binary ─────────────────────────────────────────────────────────────
 $binaryPath = "$InstallDir\time-tracker.exe"
 if (Test-Path $binaryPath) {
-    Write-Host "  [+] Removing binary"
+    Write-Host '  [+] Removing binary'
     Remove-Item -Path $binaryPath -Force
 }
 
 # ── Remove data ───────────────────────────────────────────────────────────────
 if (-not $KeepData) {
-    $response = Read-Host "  [?] Delete all data, logs, and config at $InstallDir? [y/N]"
+    $response = Read-Host ('  [?] Delete all data, logs, and config at {0}? [y/N]' -f $InstallDir)
     if ($response -match '^[Yy]') {
-        Write-Host "  [+] Removing $InstallDir"
+        Write-Host ('  [+] Removing {0}' -f $InstallDir)
         Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
     } else {
-        Write-Host "  [!] Data retained at $InstallDir"
+        Write-Host ('  [!] Data retained at {0}' -f $InstallDir)
     }
 } else {
-    Write-Host "  [!] -KeepData specified — data retained at $InstallDir"
+    Write-Host ('  [!] -KeepData specified - data retained at {0}' -f $InstallDir)
 }
 
-Write-Host ""
-Write-Host "Uninstall complete."
+Write-Host ''
+Write-Host 'Uninstall complete.'

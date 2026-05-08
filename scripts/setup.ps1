@@ -30,8 +30,8 @@ if ($env:TIME_TRACKER_UNINSTALL -eq "1") {
     if (Test-Path $UninstallScript) {
         & $UninstallScript
     } else {
-        Write-Host "  [!] Uninstall script not found at $UninstallScript. Cannot proceed automatically." -ForegroundColor Yellow
-        Write-Host "  [!] You can manually stop and delete the 'TimeTracker' service and remove the $InstallDir folder." -ForegroundColor Yellow
+        Write-Host ('  [!] Uninstall script not found at {0}. Cannot proceed automatically.' -f $UninstallScript) -ForegroundColor Yellow
+        Write-Host ('  [!] You can manually stop and delete the ''TimeTracker'' service and remove the {0} folder.' -f $InstallDir) -ForegroundColor Yellow
     }
     exit 0
 }
@@ -51,7 +51,7 @@ $zipUrl = "$releaseUrl/$zipName"
 $tempDir = Join-Path $env:TEMP "time-tracker-install"
 $zipPath = Join-Path $tempDir $zipName
 
-Write-Host "  [+] Architecture detected: $fileArch"
+Write-Host ('  [+] Architecture detected: {0}' -f $fileArch)
 
 # Clean temp directory if exists
 if (Test-Path $tempDir) {
@@ -60,7 +60,7 @@ if (Test-Path $tempDir) {
 New-Item -ItemType Directory -Path $tempDir | Out-Null
 
 # Download
-Write-Host "  [+] Downloading $zipUrl ..."
+Write-Host ('  [+] Downloading {0} ...' -f $zipUrl)
 try {
     Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
 } catch {
@@ -69,7 +69,7 @@ try {
 }
 
 # Extract
-Write-Host "  [+] Extracting to $tempDir ..."
+Write-Host ('  [+] Extracting to {0} ...' -f $tempDir)
 Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
 
 # Run Installer
@@ -82,29 +82,29 @@ if (-not (Test-Path $installerScript)) {
     exit 1
 }
 
-Write-Host "  [+] Running installer script..."
+Write-Host '  [+] Running installer script...'
 & $installerScript -BinaryPath $binaryPath
 
 # Install location helper
 if (Test-Path $locationBinary) {
-    Write-Host "  [+] Installing location helper..."
+    Write-Host '  [+] Installing location helper...'
     Copy-Item $locationBinary "$InstallDir\time-tracker-location.exe" -Force
     
     # Add to system PATH so the daemon can find it
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
     if ($currentPath -notlike "*time-tracker*") {
-        Write-Host "  [+] Adding $InstallDir to System PATH..."
+        Write-Host ('  [+] Adding {0} to System PATH...' -f $InstallDir)
         [Environment]::SetEnvironmentVariable("Path", "$currentPath;$InstallDir", "Machine")
     }
 } else {
-    Write-Host "  [!] Location helper binary not found in archive. Falling back to IP-based location." -ForegroundColor Yellow
+    Write-Host '  [!] Location helper binary not found in archive. Falling back to IP-based location.' -ForegroundColor Yellow
 }
 
 # Cleanup
-Write-Host "  [+] Cleaning up temp files..."
+Write-Host '  [+] Cleaning up temp files...'
 Remove-Item -Path $tempDir -Recurse -Force
 
 Write-Host "`n  [+] Time Tracker Installation Complete! 🚀" -ForegroundColor Green
-Write-Host "      - To check status: Get-Service TimeTracker"
-Write-Host "      - Logs and config: $InstallDir"
-Write-Host "      - Please ensure Location Services are enabled in Windows Settings if you want GPS/WiFi accuracy.`n"
+Write-Host '      - To check status: Get-Service TimeTracker'
+Write-Host ('      - Logs and config: {0}' -f $InstallDir)
+Write-Host '      - Please ensure Location Services are enabled in Windows Settings if you want GPS/WiFi accuracy.'
