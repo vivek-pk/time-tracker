@@ -1,4 +1,4 @@
-# uninstall-windows.ps1 — Remove the time-tracker Windows Service.
+# uninstall-windows.ps1 - Remove the time-tracker Windows Service.
 #
 # Must be run as Administrator.
 
@@ -11,14 +11,14 @@ $ErrorActionPreference = "Stop"
 $ServiceName = "TimeTracker"
 $InstallDir  = "$env:ProgramData\time-tracker"
 
-# ── Admin check ───────────────────────────────────────────────────────────────
+# -- Admin check ---------------------------------------------------------
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Error "This script must be run as Administrator."
     exit 1
 }
 
-# ── Stop and remove service ───────────────────────────────────────────────────
+# -- Stop and remove service ----------------------------------------------
 $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existingService) {
     Write-Host '  [+] Stopping service...'
@@ -31,14 +31,14 @@ if ($existingService) {
     Write-Host ('  [!] Service ''{0}'' not found - skipping' -f $ServiceName)
 }
 
-# ── Remove binary ─────────────────────────────────────────────────────────────
+# -- Remove binary --------------------------------------------------------
 $binaryPath = "$InstallDir\time-tracker.exe"
 if (Test-Path $binaryPath) {
     Write-Host '  [+] Removing binary'
     Remove-Item -Path $binaryPath -Force
 }
 
-# ── Remove data ───────────────────────────────────────────────────────────────
+# -- Remove data ----------------------------------------------------------
 if (-not $KeepData) {
     $response = Read-Host ('  [?] Delete all data, logs, and config at {0}? [y/N]' -f $InstallDir)
     if ($response -match '^[Yy]') {

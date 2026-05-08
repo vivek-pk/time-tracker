@@ -1,4 +1,4 @@
-# install-windows.ps1 — Install time-tracker as a Windows Service.
+# install-windows.ps1 - Install time-tracker as a Windows Service.
 #
 # Must be run as Administrator.
 # Usage: .\scripts\install-windows.ps1 [-BinaryPath .\bin\time-tracker.exe]
@@ -9,7 +9,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+# -- Configuration -------------------------------------------------------
 $ServiceName = "TimeTracker"
 $DisplayName = "Time Tracker - Activity Monitor"
 $Description = "Monitors keyboard/mouse activity and syncs attendance data."
@@ -19,20 +19,20 @@ $EnvFile     = "$InstallDir\.env"
 $DbDir       = "$InstallDir"
 $LogDir      = "$InstallDir\logs"
 
-# ── Admin check ───────────────────────────────────────────────────────────────
+# -- Admin check ---------------------------------------------------------
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Error "This script must be run as Administrator."
     exit 1
 }
 
-# ── Sanity check ──────────────────────────────────────────────────────────────
+# -- Sanity check ---------------------------------------------------------
 if (-not (Test-Path $BinaryPath)) {
-    Write-Error "Binary not found at $BinaryPath — run 'make build' or 'make build-windows' first."
+    Write-Error "Binary not found at $BinaryPath - run 'make build' or 'make build-windows' first."
     exit 1
 }
 
-# ── Stop existing service ─────────────────────────────────────────────────────
+# -- Stop existing service ------------------------------------------------
 $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existingService) {
     Write-Host '  [+] Stopping existing service...'
@@ -43,16 +43,16 @@ if ($existingService) {
     Start-Sleep -Seconds 1
 }
 
-# ── Create directories ────────────────────────────────────────────────────────
+# -- Create directories ---------------------------------------------------
 Write-Host '  [+] Creating directories'
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 
-# ── Install binary ────────────────────────────────────────────────────────────
+# -- Install binary -------------------------------------------------------
 Write-Host ('  [+] Installing binary -> {0}' -f $BinaryDst)
 Copy-Item -Path $BinaryPath -Destination $BinaryDst -Force
 
-# ── Install config ────────────────────────────────────────────────────────────
+# -- Install config -------------------------------------------------------
 if (Test-Path $EnvFile) {
     Write-Host ('  [!] Config {0} already exists - not overwriting.' -f $EnvFile)
 } else {
@@ -78,7 +78,7 @@ if (Test-Path $EnvFile) {
     Write-Host ('  [!] IMPORTANT: edit {0} and set SYNC_API_URL before starting the service' -f $EnvFile)
 }
 
-# ── Create Windows Service ───────────────────────────────────────────────────
+# -- Create Windows Service -----------------------------------------------
 Write-Host ('  [+] Creating Windows Service ''{0}''' -f $ServiceName)
 
 # Use sc.exe to create the service with environment variable
@@ -99,7 +99,7 @@ $envValue = "ENV_FILE=$EnvFile"
 # Create or update the Environment multi-string value
 Set-ItemProperty -Path $regPath -Name "Environment" -Value @($envValue) -Type MultiString
 
-# ── Start service ─────────────────────────────────────────────────────────────
+# -- Start service --------------------------------------------------------
 Write-Host '  [+] Starting service...'
 Start-Service -Name $ServiceName
 Start-Sleep -Seconds 2

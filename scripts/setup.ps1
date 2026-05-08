@@ -1,4 +1,4 @@
-# setup.ps1 — Unified Windows Setup Script
+# setup.ps1 - Unified Windows Setup Script
 #
 # Install or uninstall with a single command from PowerShell (Run as Administrator):
 #
@@ -10,34 +10,38 @@
 
 $ErrorActionPreference = "Stop"
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+# -- Configuration -------------------------------------------------------
 $repoUrl = "https://github.com/vivek-pk/time-tracker"
 $releaseUrl = "$repoUrl/releases/latest/download"
 $InstallDir = "$env:ProgramData\time-tracker"
 
-# ── Admin check ───────────────────────────────────────────────────────────────
+# -- Admin check ---------------------------------------------------------
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Error "This script must be run as Administrator."
     exit 1
 }
 
-# ── Uninstall flow ────────────────────────────────────────────────────────────
+# -- Uninstall flow -------------------------------------------------------
 if ($env:TIME_TRACKER_UNINSTALL -eq "1") {
-    Write-Host "`n  [+] Time Tracker Uninstall Started`n" -ForegroundColor Cyan
-    
+    Write-Host ""
+    Write-Host '  [+] Time Tracker Uninstall Started' -ForegroundColor Cyan
+    Write-Host ""
+
     $UninstallScript = "$InstallDir\uninstall-windows.ps1"
     if (Test-Path $UninstallScript) {
         & $UninstallScript
     } else {
         Write-Host ('  [!] Uninstall script not found at {0}. Cannot proceed automatically.' -f $UninstallScript) -ForegroundColor Yellow
-        Write-Host ('  [!] You can manually stop and delete the ''TimeTracker'' service and remove the {0} folder.' -f $InstallDir) -ForegroundColor Yellow
+        Write-Host ('  [!] You can manually stop and delete the TimeTracker service and remove the {0} folder.' -f $InstallDir) -ForegroundColor Yellow
     }
     exit 0
 }
 
-# ── Install flow ──────────────────────────────────────────────────────────────
-Write-Host "`n  [+] Time Tracker Install Started`n" -ForegroundColor Cyan
+# -- Install flow ---------------------------------------------------------
+Write-Host ""
+Write-Host '  [+] Time Tracker Install Started' -ForegroundColor Cyan
+Write-Host ""
 
 # Determine Architecture
 $arch = $env:PROCESSOR_ARCHITECTURE
@@ -62,7 +66,7 @@ New-Item -ItemType Directory -Path $tempDir | Out-Null
 # Download
 Write-Host ('  [+] Downloading {0} ...' -f $zipUrl)
 try {
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
 } catch {
     Write-Error "Failed to download release. Ensure you have internet access and the release exists."
     exit 1
@@ -73,7 +77,7 @@ Write-Host ('  [+] Extracting to {0} ...' -f $tempDir)
 Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
 
 # Run Installer
-$installerScript = Join-Path $tempDir "scripts/install-windows.ps1"
+$installerScript = Join-Path $tempDir "scripts\install-windows.ps1"
 $binaryPath = Join-Path $tempDir "time-tracker-windows-$fileArch.exe"
 $locationBinary = Join-Path $tempDir "time-tracker-location-windows-$fileArch.exe"
 
@@ -89,7 +93,7 @@ Write-Host '  [+] Running installer script...'
 if (Test-Path $locationBinary) {
     Write-Host '  [+] Installing location helper...'
     Copy-Item $locationBinary "$InstallDir\time-tracker-location.exe" -Force
-    
+
     # Add to system PATH so the daemon can find it
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
     if ($currentPath -notlike "*time-tracker*") {
@@ -104,7 +108,9 @@ if (Test-Path $locationBinary) {
 Write-Host '  [+] Cleaning up temp files...'
 Remove-Item -Path $tempDir -Recurse -Force
 
-Write-Host "`n  [+] Time Tracker Installation Complete! 🚀" -ForegroundColor Green
+Write-Host ""
+Write-Host '  [+] Time Tracker Installation Complete!' -ForegroundColor Green
 Write-Host '      - To check status: Get-Service TimeTracker'
 Write-Host ('      - Logs and config: {0}' -f $InstallDir)
 Write-Host '      - Please ensure Location Services are enabled in Windows Settings if you want GPS/WiFi accuracy.'
+Write-Host ""
