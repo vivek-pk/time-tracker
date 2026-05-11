@@ -43,13 +43,12 @@ func (m *Monitor) Run(stopCh <-chan struct{}) {
 	log.Printf("monitor: starting poll=%s idle_threshold=%s",
 		m.cfg.PollInterval(), m.cfg.IdleThreshold())
 
-	// One-time HID probe check — immediately reveals if idle detection works.
+	// One-time HID probe check
 	testIdle := idleSeconds()
 	if testIdle < 0 {
-		log.Println("monitor: WARNING — HID idle probe returned -1; idle detection will NOT work in this context")
-		log.Println("monitor: this happens when running as a root daemon without a display session")
+		log.Println("monitor: idle detection unavailable (no display session) - will default to active")
 	} else {
-		log.Printf("monitor: HID probe OK (current idle: %.1fs)", testIdle)
+		log.Printf("monitor: idle detection OK (current idle: %.1fs)", testIdle)
 	}
 
 	ticker := time.NewTicker(m.cfg.PollInterval())
@@ -123,14 +122,8 @@ func (m *Monitor) poll(_ time.Time) {
 
 func (m *Monitor) classifyState() storage.State {
 	idle := idleSeconds()
-	// TODO: remove this debug log once idle detection is confirmed working
-	log.Printf("monitor: [debug] idle=%.1fs threshold=%s idle<0=%v", idle, m.cfg.IdleThreshold(), idle < 0)
 	if idle < 0 {
-		// IOHIDSystem probe failed — common when running as a root daemon
-		// without a display session. Log once per transition only.
-		if m.currentState != storage.StateActive {
-			log.Println("monitor: HID idle probe returned -1 (no display session?), defaulting to active")
-		}
+		// No display session — default to active (machine is on and working).
 		return storage.StateActive
 	}
 	if time.Duration(float64(time.Second)*idle) >= m.cfg.IdleThreshold() {
