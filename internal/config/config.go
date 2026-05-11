@@ -49,7 +49,8 @@ type jsonConfig struct {
 	RetentionDays        *int   `json:"retention_days,omitempty"`
 	SyncTimeoutSeconds   *int   `json:"sync_timeout_seconds,omitempty"`
 	RealtimeSync         *bool  `json:"realtime_sync,omitempty"`
-	GoogleGeoAPIKey      string `json:"google_geolocation_api_key,omitempty"`
+	GoogleGeoAPIKey      string   `json:"google_geolocation_api_key,omitempty"`
+	UnwiredLabsToken     string   `json:"unwired_labs_api_token,omitempty"`
 }
 
 // Config holds all runtime configuration.
@@ -68,6 +69,7 @@ type Config struct {
 	SyncTimeoutSeconds   int
 	RealtimeSync         bool
 	GoogleGeoAPIKey      string
+	UnwiredLabsToken     string
 }
 
 // Load reads config with the following priority (highest wins):
@@ -105,6 +107,7 @@ func Load(envFilePath string) (*Config, error) {
 		SyncTimeoutSeconds:   intPriority("SYNC_TIMEOUT_SECONDS", jc.SyncTimeoutSeconds, 30),
 		RealtimeSync:         boolPriority("REALTIME_SYNC", jc.RealtimeSync, false),
 		GoogleGeoAPIKey:      strPriority("GOOGLE_GEOLOCATION_API_KEY", jc.GoogleGeoAPIKey, ""),
+		UnwiredLabsToken:     strPriority("UNWIRED_LABS_API_TOKEN", jc.UnwiredLabsToken, ""),
 	}
 	return cfg, cfg.validate()
 }
@@ -170,6 +173,22 @@ func boolPriority(envKey string, jsonVal *bool, def bool) bool {
 	if s := os.Getenv(envKey); s != "" {
 		s = strings.TrimSpace(strings.ToLower(s))
 		return s == "true" || s == "1" || s == "yes"
+	}
+	if jsonVal != nil {
+		return *jsonVal
+	}
+	return def
+}
+
+// floatPriority returns: env var > jsonVal > compiled default.
+func floatPriority(envKey string, jsonVal *float64, def float64) float64 {
+	if s := os.Getenv(envKey); s != "" {
+		f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+		if err != nil {
+			log.Printf("config: invalid float for %s, using default", envKey)
+		} else {
+			return f
+		}
 	}
 	if jsonVal != nil {
 		return *jsonVal

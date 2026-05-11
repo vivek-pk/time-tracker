@@ -9,5 +9,6 @@
     "retention_days": 15,
     "sync_timeout_seconds": 30,
     "realtime_sync": true,
-    "google_geolocation_api_key": ""
+    "google_geolocation_api_key": "",
+    "unwired_labs_api_token": ""
 }
