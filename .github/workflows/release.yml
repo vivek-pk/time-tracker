@@ -56,13 +56,24 @@ jobs:
     - name: Package Linux binaries
       run: |
         # Package amd64
-        tar -czf time-tracker-linux-amd64.tar.gz \
-          -C bin time-tracker-linux-amd64 time-tracker-location-linux-amd64 \
-          -C .. systemd/time-tracker.service scripts/install-linux.sh scripts/uninstall-linux.sh
+        STAGE_AMD64=$(mktemp -d)
+        cp bin/time-tracker-linux-amd64 "$STAGE_AMD64/"
+        cp bin/time-tracker-location-linux-amd64 "$STAGE_AMD64/"
+        mkdir -p "$STAGE_AMD64/systemd" "$STAGE_AMD64/scripts"
+        cp systemd/time-tracker.service "$STAGE_AMD64/systemd/"
+        cp scripts/install-linux.sh scripts/uninstall-linux.sh "$STAGE_AMD64/scripts/"
+        tar -czf time-tracker-linux-amd64.tar.gz -C "$STAGE_AMD64" .
+        rm -rf "$STAGE_AMD64"
+
         # Package arm64
-        tar -czf time-tracker-linux-arm64.tar.gz \
-          -C bin time-tracker-linux-arm64 time-tracker-location-linux-arm64 \
-          -C .. systemd/time-tracker.service scripts/install-linux.sh scripts/uninstall-linux.sh
+        STAGE_ARM64=$(mktemp -d)
+        cp bin/time-tracker-linux-arm64 "$STAGE_ARM64/"
+        cp bin/time-tracker-location-linux-arm64 "$STAGE_ARM64/"
+        mkdir -p "$STAGE_ARM64/systemd" "$STAGE_ARM64/scripts"
+        cp systemd/time-tracker.service "$STAGE_ARM64/systemd/"
+        cp scripts/install-linux.sh scripts/uninstall-linux.sh "$STAGE_ARM64/scripts/"
+        tar -czf time-tracker-linux-arm64.tar.gz -C "$STAGE_ARM64" .
+        rm -rf "$STAGE_ARM64"
 
     - name: Upload Linux artifacts
       uses: actions/upload-artifact@v4
