@@ -49,6 +49,7 @@ type jsonConfig struct {
 	RetentionDays        *int   `json:"retention_days,omitempty"`
 	SyncTimeoutSeconds   *int   `json:"sync_timeout_seconds,omitempty"`
 	RealtimeSync         *bool  `json:"realtime_sync,omitempty"`
+	GoogleGeoAPIKey      string `json:"google_geolocation_api_key,omitempty"`
 }
 
 // Config holds all runtime configuration.
@@ -66,6 +67,7 @@ type Config struct {
 	RetentionDays        int
 	SyncTimeoutSeconds   int
 	RealtimeSync         bool
+	GoogleGeoAPIKey      string
 }
 
 // Load reads config with the following priority (highest wins):
@@ -102,6 +104,7 @@ func Load(envFilePath string) (*Config, error) {
 		RetentionDays:        intPriority("RETENTION_DAYS", jc.RetentionDays, 3),
 		SyncTimeoutSeconds:   intPriority("SYNC_TIMEOUT_SECONDS", jc.SyncTimeoutSeconds, 30),
 		RealtimeSync:         boolPriority("REALTIME_SYNC", jc.RealtimeSync, false),
+		GoogleGeoAPIKey:      strPriority("GOOGLE_GEOLOCATION_API_KEY", jc.GoogleGeoAPIKey, ""),
 	}
 	return cfg, cfg.validate()
 }

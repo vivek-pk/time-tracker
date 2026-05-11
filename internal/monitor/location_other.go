@@ -13,12 +13,11 @@ import (
 
 // refreshAndReadLocation on non-macOS platforms:
 //  1. Tries to trigger a platform-native location helper if available
-//  2. Falls back to IP-based geolocation (city-level accuracy)
-//  3. Reads whatever location data is available on disk
+//  2. Tries Google WiFi Geolocation API (if API key configured) for accurate location
+//  3. Falls back to IP-based geolocation (city-level accuracy)
 func (m *Monitor) refreshAndReadLocation() storage.LocationInfo {
 	// First, try to trigger the platform-native location helper binary.
 	// On Linux this uses GeoClue2 D-Bus; on Windows, the Windows Location API.
-	// These helpers write to the same shared JSON file as the macOS helper.
 	helperName := "time-tracker-location"
 	if runtime.GOOS == "windows" {
 		helperName = "time-tracker-location.exe"
@@ -29,10 +28,22 @@ func (m *Monitor) refreshAndReadLocation() storage.LocationInfo {
 		if out, err := exec.Command(helperName).CombinedOutput(); err != nil {
 			log.Printf("monitor: location helper failed: %v (%s)", err, string(out))
 		}
-		// Helper writes to SharedFilePath — read it below
 		loc := m.readLocation()
-		if loc.Latitude != 0 || loc.Longitude != 0 {
+		if (loc.Latitude != 0 || loc.Longitude != 0) {
 			return loc
+		}
+	}
+
+	// Second, try Google WiFi Geolocation (accurate, ~20-100m)
+	if m.cfg.GoogleGeoAPIKey != "" {
+		log.Println("monitor: trying Google WiFi Geolocation")
+		if err := location.FetchAndWriteWiFiGeolocation(location.SharedFilePath, m.cfg.GoogleGeoAPIKey); err != nil {
+			log.Printf("monitor: WiFi geolocation failed: %v", err)
+		} else {
+			loc := m.readLocation()
+			if loc.Latitude != 0 || loc.Longitude != 0 {
+				return loc
+			}
 		}
 	}
 
