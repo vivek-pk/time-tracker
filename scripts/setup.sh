@@ -399,6 +399,9 @@ do_install() {
             printf "  ${CYAN}  System Settings → Privacy & Security → Location Services${RESET}\n"
             printf "  ${WHITE}  Find ${BOLD}time-tracker-location${RESET}${WHITE} and enable it.${RESET}\n"
             echo ""
+            printf "  ${DIM}${GRAY}  Or run this command to open Location Settings:${RESET}\n"
+            printf "  ${CYAN}  open \"x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices\"${RESET}\n"
+            echo ""
         fi
     else
         printf "  ${BOLD}${YELLOW}[%d/%d]${RESET} ${WHITE}%s ${YELLOW}${SYM_WARN}${RESET} ${DIM}${YELLOW}run 'open %s' after login to grant permission${RESET}\n" $S $TOTAL_STEPS "Requesting location permission" "$LOC_APP_DIR"

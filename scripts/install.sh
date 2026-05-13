@@ -141,9 +141,13 @@ echo "  ** Copy the Machine ID above to register this machine in your HRMS **"
 echo ""
 
 # -- Trigger location permission dialog --------------------------------------
-echo "  [+] Triggering location permission dialog..."
-echo "      If the dialog does not appear, grant access manually in:"
-echo "      System Settings > Privacy & Security > Location Services > time-tracker-location"
+echo "==========================================================="
+echo "ACTION REQUIRED: Grant Location Permission"
+echo "==========================================================="
+echo ""
+echo "  Time tracker needs location access to log where you work."
+echo ""
+echo "  [+] Opening System Settings to Location Services..."
 echo ""
 
 # Run the location helper once as the current user to trigger the permission prompt
@@ -151,4 +155,30 @@ if [[ -n "$CURRENT_USER" && "$CURRENT_USER" != "root" ]]; then
     CURRENT_UID=$(id -u "$CURRENT_USER")
     # Kick the location agent to trigger the permission dialog
     launchctl kickstart gui/"$CURRENT_UID"/"$AGENT_LABEL" 2>/dev/null || true
+    
+    # Give it a moment to attempt location access
+    sleep 2
+    
+    echo "  STEPS TO COMPLETE SETUP:"
+    echo "  ────────────────────────────────────────────────────────"
+    echo "  1. A permission dialog may have appeared - click 'Allow'"
+    echo ""
+    echo "  2. If no dialog appeared, open System Settings manually:"
+    echo "     • Open: System Settings (or System Preferences)"
+    echo "     • Navigate: Privacy & Security → Location Services"
+    echo "     • Find: 'time-tracker-location' in the list"
+    echo "     • Enable: Check the box next to it"
+    echo ""
+    echo "  3. You can also open Location Services directly with:"
+    echo "     open x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices"
+    echo ""
+    echo "  4. Verify it's working by checking the logs:"
+    echo "     sudo tail -20 $LOG_DIR/output.log"
+    echo "     (Should show 'location: lat=... lon=...' with a fresh timestamp)"
+    echo ""
+    echo "  5. If location is still not updating, restart the daemon:"
+    echo "     sudo launchctl kickstart -k system/$PLIST_LABEL"
+    echo "     launchctl kickstart -k gui/$CURRENT_UID/$AGENT_LABEL"
+    echo ""
+    echo "==========================================================="
 fi

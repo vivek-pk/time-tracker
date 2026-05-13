@@ -1,3 +1,5 @@
+//go:build darwin
+
 package monitor
 
 import (
@@ -34,17 +36,29 @@ func (m *Monitor) refreshAndReadLocation() storage.LocationInfo {
 
 	// Trigger the LaunchAgent in the user's GUI session (has CoreLocation access)
 	label := "gui/" + uid + "/com.timetracker.locationhelper"
-	exec.Command("launchctl", "kickstart", label).Run()
+	log.Printf("monitor: triggering location helper (label=%s)", label)
+	out, err := exec.Command("launchctl", "kickstart", "-k", label).CombinedOutput()
+	if err != nil {
+		log.Printf("monitor: launchctl kickstart failed: %v, output: %s", err, string(out))
+		return m.readLocation()
+	}
+	log.Printf("monitor: launchctl kickstart success, waiting for location update...")
 
 	// Wait up to 35 seconds for the file to be updated (helper timeout is 30s)
 	deadline := time.Now().Add(35 * time.Second)
+	updated := false
 	for time.Now().Before(deadline) {
 		time.Sleep(1 * time.Second)
 		if fi, err := os.Stat(location.SharedFilePath); err == nil {
 			if fi.ModTime().After(oldModTime) {
+				updated = true
+				log.Printf("monitor: location file updated after %.0fs", time.Since(oldModTime.Add(-35*time.Second)).Seconds())
 				break // fresh fix written!
 			}
 		}
+	}
+	if !updated {
+		log.Printf("monitor: location file not updated after 35s timeout")
 	}
 
 	return m.readLocation()

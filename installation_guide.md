@@ -11,6 +11,22 @@ Open **Terminal** and paste the following command:
 sudo /bin/bash -c "$(curl -fsSL https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.sh)"
 ```
 
+**⚠️ Important: Location Permission Required**
+
+After installation, you **must grant location permission** for the tracker to log your work location:
+
+1. A permission dialog may appear automatically - click **"Allow"**
+2. If no dialog appears, open **System Settings** manually:
+   - Go to: **System Settings** (or System Preferences) → **Privacy & Security** → **Location Services**
+   - Find: **"time-tracker-location"** in the list
+   - Enable: Check the box next to it
+
+You can verify location is working by checking the logs:
+```bash
+sudo tail -20 /var/log/time-tracker/output.log
+```
+Look for a line like: `location: lat=... lon=...` with a fresh timestamp (not "stale").
+
 **Uninstall:**
 ```bash
 sudo /bin/bash -c "$(curl -fsSL https://github.com/vivek-pk/time-tracker/releases/latest/download/setup.sh)" -- --uninstall
