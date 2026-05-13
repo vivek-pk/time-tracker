@@ -127,17 +127,35 @@ else
     warn "Logs: tail -f $LOG_DIR/error.log"
 fi
 
+# -- Read Machine ID ---------------------------------------------------------
+MACHINE_ID=""
+MACHINE_ID=$(ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null | awk -F'"' '/IOPlatformSerialNumber/{print $4}')
+if [[ -z "$MACHINE_ID" ]]; then
+    MACHINE_ID=$(hostname -s)
+fi
+
 echo ""
+echo "==========================================================="
 echo "Installation complete."
-echo "  Config file : $ENV_DST"
-echo "  Logs        : $LOG_DIR/"
+echo "==========================================================="
+echo ""
+echo "  Machine ID  : $MACHINE_ID"
+echo "  Config      : embedded in binary (config.json at build time)"
 echo "  Database    : $DB_DIR/tracker.db"
+echo "  Logs        : $LOG_DIR/"
 echo ""
-echo "Edit $ENV_DST with the correct SYNC_API_URL,"
-echo "then reload the daemon with: sudo launchctl kickstart -k system/$PLIST_LABEL"
+echo "  ** Copy the Machine ID above to register this machine in your HRMS **"
 echo ""
-echo "FIRST-RUN — Location permission:"
-echo "  The location helper needs Location Services access."
-echo "  On first run it will ask for permission.  If the dialog does not appear,"
-echo "  grant it manually in:"
-echo "    System Settings > Privacy & Security > Location Services > time-tracker-location"
+
+# -- Trigger location permission dialog --------------------------------------
+echo "  [+] Triggering location permission dialog..."
+echo "      If the dialog does not appear, grant access manually in:"
+echo "      System Settings > Privacy & Security > Location Services > time-tracker-location"
+echo ""
+
+# Run the location helper once as the current user to trigger the permission prompt
+if [[ -n "$CURRENT_USER" && "$CURRENT_USER" != "root" ]]; then
+    CURRENT_UID=$(id -u "$CURRENT_USER")
+    # Kick the location agent to trigger the permission dialog
+    launchctl kickstart gui/"$CURRENT_UID"/"$AGENT_LABEL" 2>/dev/null || true
+fi
