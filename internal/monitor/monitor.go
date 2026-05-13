@@ -104,8 +104,19 @@ func (m *Monitor) poll(_ time.Time) {
 	}
 
 	newState := m.classifyState()
+	
+	// Get current idle time for logging
+	idleTime := idleSeconds()
+	
+	// Log every poll to show monitor is alive (log level: debug)
+	if m.currentSessionID != 0 && newState == m.currentState {
+		log.Printf("monitor: poll idle=%.1fs state=%s session=%d (no change)",
+			idleTime, m.currentState, m.currentSessionID)
+	}
+	
 	if m.currentSessionID == 0 || newState != m.currentState {
 		if m.currentSessionID != 0 {
+			log.Printf("monitor: state changed %s->%s, closing session id=%d", m.currentState, newState, m.currentSessionID)
 			m.closeCurrentSession(now)
 		}
 		loc := m.refreshAndReadLocation()
@@ -116,7 +127,7 @@ func (m *Monitor) poll(_ time.Time) {
 		}
 		m.currentSessionID = id
 		m.currentState = newState
-		log.Printf("monitor: new session id=%d state=%s", id, newState)
+		log.Printf("monitor: new session id=%d state=%s idle=%.1fs", id, newState, idleTime)
 	}
 }
 
