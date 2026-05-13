@@ -73,6 +73,20 @@ chmod 755 "$LOC_DST"
 # before `sudo make install`). Re-signing here would change the cdhash and
 # invalidate any prior location permission grant.
 
+# ── install location helper app bundle ───────────────────────────────────
+LOC_APP_SRC="./bin/time-tracker-location.app"
+LOC_APP_DST="/Applications/time-tracker-location.app"
+if [[ -d "$LOC_APP_SRC" ]]; then
+    info "Installing location app bundle → $LOC_APP_DST"
+    rm -rf "$LOC_APP_DST"
+    cp -R "$LOC_APP_SRC" "$LOC_APP_DST"
+    # App bundle needs to be owned by root but readable by all users
+    chown -R root:wheel "$LOC_APP_DST"
+    chmod -R 755 "$LOC_APP_DST"
+else
+    warn "Location app bundle not found at $LOC_APP_SRC — skipping"
+fi
+
 # ── install config (only if not already present) ──────────────────────────────
 # (Config is now embedded via config.json, .env is skipped)
 
