@@ -3,13 +3,13 @@ package location
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"time"
 )
 
 // SharedFilePath is where the location helper writes and the system daemon reads.
-// Uses the OS temp directory to avoid permission conflicts.
-var SharedFilePath = filepath.Join(os.TempDir(), "time-tracker-location.json")
+// Uses /tmp/ (symlink to /private/tmp/) which is accessible to both root daemon
+// and user LaunchAgent processes.
+var SharedFilePath = "/tmp/time-tracker-location.json"
 
 // Info holds GPS coordinates captured by the location helper.
 type Info struct {
