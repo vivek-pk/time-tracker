@@ -223,35 +223,7 @@ write_agent_plist() {
 PLIST
 }
 
-write_default_env() {
-    cat > "$ENV_DST" << 'ENVFILE'
-# /etc/time-tracker/.env  (OPTIONAL OVERRIDE FILE)
-# All configuration is embedded in the binary (config.json).
-# Uncomment variables below ONLY if you need to override them on this specific machine.
-# Edit this file and reload: sudo launchctl kickstart -k system/com.timetracker.daemon
 
-# ── Required ──────────────────────────────────────────────────────────────────
-# SYNC_API_URL=https://your-api-endpoint.example.com/attendance
-
-# ── Authentication ────────────────────────────────────────────────────────────
-# SYNC_API_KEY=
-
-# ── Sync schedule ─────────────────────────────────────────────────────────────
-# MORNING_SYNC_HOUR=6
-# EVENING_SYNC_HOUR=18
-# EVENING_SYNC_MINUTE=30
-
-# ── Activity detection ────────────────────────────────────────────────────────
-# IDLE_THRESHOLD_MINUTES=5
-# POLL_INTERVAL_SECONDS=30
-
-# ── Storage ───────────────────────────────────────────────────────────────────
-# DB_PATH=/var/lib/time-tracker/tracker.db
-# LOG_PATH=/var/log/time-tracker
-# RETENTION_DAYS=3
-# SYNC_TIMEOUT_SECONDS=30
-ENVFILE
-}
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  INSTALL
@@ -433,18 +405,11 @@ do_install() {
     fi
 
 
-    # ── Step 7: Install configuration (optional override) ──
+    # ── Step 7: Configuration (Embedded) ──
     S=7
-    step_start $S $TOTAL_STEPS "Installing configuration..."
+    step_start $S $TOTAL_STEPS "Checking configuration..."
     sleep 0.3
-    if [[ -f "$ENV_DST" ]]; then
-        step_warn "config exists — not overwriting" $S $TOTAL_STEPS "Installing configuration"
-    else
-        write_default_env
-        chown root:wheel "$ENV_DST"
-        chmod 640 "$ENV_DST"
-        step_done "optional override at $ENV_DST" $S $TOTAL_STEPS "Installing configuration"
-    fi
+    step_done "embedded in binary" $S $TOTAL_STEPS "Checking configuration"
 
     # ── Step 8: Load system daemon ──
     S=8

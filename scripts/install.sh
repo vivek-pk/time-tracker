@@ -74,15 +74,8 @@ chmod 755 "$LOC_DST"
 # invalidate any prior location permission grant.
 
 # ── install config (only if not already present) ──────────────────────────────
-if [[ -f "$ENV_DST" ]]; then
-    warn "Config $ENV_DST already exists — not overwriting.  Edit it manually."
-else
-    info "Installing config template → $ENV_DST"
-    cp "$ENV_SRC" "$ENV_DST"
-    chown root:wheel "$ENV_DST"
-    chmod 640 "$ENV_DST"   # root can read/write; wheel can read; others: nothing
-    warn "IMPORTANT: edit $ENV_DST and set SYNC_API_URL before the daemon starts"
-fi
+# (Config is now embedded via config.json, .env is skipped)
+
 
 # ── install plist ─────────────────────────────────────────────────────────────
 info "Installing daemon plist → $PLIST_DST"

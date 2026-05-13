@@ -6,8 +6,6 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/time-tracker
-EnvironmentFile=-/etc/time-tracker/.env
-Environment=ENV_FILE=/etc/time-tracker/.env
 Restart=always
 RestartSec=10
 Nice=10

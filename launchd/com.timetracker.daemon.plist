@@ -34,13 +34,6 @@
         <string>/usr/local/bin/time-tracker</string>
     </array>
 
-    <!-- Point the binary at the admin-managed config file. -->
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>ENV_FILE</key>
-        <string>/etc/time-tracker/.env</string>
-    </dict>
-
     <!-- Start immediately when the plist is loaded and on every boot. -->
     <key>RunAtLoad</key>
     <true/>
