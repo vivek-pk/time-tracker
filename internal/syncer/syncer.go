@@ -73,7 +73,14 @@ func (s *Syncer) Run(stopCh <-chan struct{}, wakeEvents <-chan monitor.WakeEvent
 			return
 		case we := <-wakeEvents:
 			log.Printf("syncer: wake event woke=%s", we.WokeAt.Format(time.RFC3339))
+			// On every wake, push any unsynced sessions regardless of whether
+			// morning sync already ran today. This ensures sessions from a
+			// previous day (or late-night work) are uploaded as soon as the
+			// machine comes online, even mid-day.
 			s.handleWake(we.WokeAt)
+			if s.morningSyncedToday == we.WokeAt.Local().Format("2006-01-02") {
+				s.catchupSync(we.WokeAt)
+			}
 		case now := <-ticker.C:
 			s.handleWake(now)
 			s.checkEveningSync(now)
@@ -95,9 +102,11 @@ func (s *Syncer) handleWake(now time.Time) {
 	if now.Local().Hour() < s.cfg.MorningSyncHour {
 		return
 	}
-	yesterday := now.Local().AddDate(0, 0, -1).Format("2006-01-02")
-	log.Printf("syncer: morning sync pushing sessions up to %s", yesterday)
-	sessions, err := s.db.UnsyncedUpToDate(yesterday)
+	// Push ALL unsynced closed sessions — not just up to yesterday.
+	// This catches sessions from any previous day that were never pushed
+	// (missed syncs, late-night work after evening sync ran, etc.).
+	log.Printf("syncer: morning sync pushing all unsynced sessions")
+	sessions, err := s.db.UnsyncedAll()
 	if err != nil {
 		log.Printf("syncer: morning query: %v", err)
 		return
@@ -107,6 +116,7 @@ func (s *Syncer) handleWake(now time.Time) {
 		s.morningSyncedToday = today
 		return
 	}
+	yesterday := now.Local().AddDate(0, 0, -1).Format("2006-01-02")
 	if err := s.push("morning", sessions); err != nil {
 		log.Printf("syncer: morning push failed: %v", err)
 		return
@@ -236,6 +246,25 @@ func (s *Syncer) push(syncType string, sessions []storage.Session) error {
 		return nil
 	}
 	return fmt.Errorf("all retries exhausted: %w", lastErr)
+}
+
+// catchupSync pushes any unsynced closed sessions that remain after morning
+// sync already ran today. Called on every wake event so that sessions created
+// since this morning's sync (or from a previous missed sync) are uploaded as
+// soon as internet is available.
+func (s *Syncer) catchupSync(now time.Time) {
+	sessions, err := s.db.UnsyncedAll()
+	if err != nil {
+		log.Printf("syncer: catchup query: %v", err)
+		return
+	}
+	if len(sessions) == 0 {
+		return
+	}
+	log.Printf("syncer: catchup sync pushing %d unsynced session(s)", len(sessions))
+	if err := s.push("catchup", sessions); err != nil {
+		log.Printf("syncer: catchup push failed: %v", err)
+	}
 }
 
 func (s *Syncer) cleanup(upToDate string) {
