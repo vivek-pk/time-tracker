@@ -312,6 +312,10 @@ do_install() {
     S=3
     step_start $S $TOTAL_STEPS "Creating directories..."
     sleep 0.3
+    # Ensure /usr/local/bin exists — absent on fresh macOS without Homebrew/Xcode CLT
+    mkdir -p /usr/local/bin
+    chown root:wheel /usr/local/bin
+    chmod 755 /usr/local/bin
     for dir in "$DB_DIR" "$LOG_DIR" "$CONF_DIR"; do
         mkdir -p "$dir"
         chown root:wheel "$dir"
