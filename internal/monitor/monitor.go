@@ -120,6 +120,13 @@ func (m *Monitor) poll(_ time.Time) {
 			m.closeCurrentSession(now)
 		}
 		loc := m.refreshAndReadLocation()
+		// Update lastPollAt AFTER the location refresh completes.
+		// If the machine sleeps during the ~35s location wait, the next poll
+		// would see a huge gap from the pre-refresh lastPollAt and falsely
+		// fire sleep detection again, creating cascading 0-second sessions.
+		// Anchoring here means the next gap is measured from when we actually
+		// finished creating this session, not before the refresh started.
+		m.lastPollAt = time.Now().Round(0)
 		id, err := m.db.StartSession(m.cfg.MachineID, newState, now, loc)
 		if err != nil {
 			log.Printf("monitor: start session state=%s: %v", newState, err)
