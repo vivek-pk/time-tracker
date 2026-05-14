@@ -39,12 +39,13 @@ type sessionFlusher interface {
 
 // Syncer handles morning and evening scheduled syncs.
 type Syncer struct {
-	cfg                *config.Config
-	db                 *storage.DB
-	mon                sessionFlusher
-	client             *http.Client
-	morningSyncedToday string
-	eveningSyncedToday string
+	cfg                 *config.Config
+	db                  *storage.DB
+	mon                 sessionFlusher
+	client              *http.Client
+	morningSyncedToday  string
+	eveningSyncedToday  string
+	eveningFlushedToday string // tracks flush separately so retries don't create micro-sessions
 }
 
 // New creates a Syncer ready to run.
@@ -128,7 +129,12 @@ func (s *Syncer) checkEveningSync(now time.Time) {
 	}
 	log.Printf("syncer: evening sync pushing today %s", today)
 	// Close any in-progress session so it is included in this sync.
-	s.mon.FlushCurrentSession(now)
+	// Only flush once per day — retries reuse the already-closed session
+	// and don't create new micro-sessions on each failed attempt.
+	if s.eveningFlushedToday != today {
+		s.mon.FlushCurrentSession(now)
+		s.eveningFlushedToday = today
+	}
 	sessions, err := s.db.UnsyncedForDate(today)
 	if err != nil {
 		log.Printf("syncer: evening query: %v", err)
@@ -150,13 +156,23 @@ func (s *Syncer) checkEveningSync(now time.Time) {
 
 // realtimeSync pushes all unsynced closed sessions to the API immediately.
 func (s *Syncer) realtimeSync(now time.Time) {
-	// Flush the current open session so it becomes a closed, syncable record.
-	s.mon.FlushCurrentSession(now)
-
+	// Check for already-queued unsynced sessions first.
+	// If there are sessions waiting (from a previous failed push), skip
+	// flushing the current session — this prevents 1-minute micro-sessions
+	// from piling up while the machine is offline.
 	sessions, err := s.db.UnsyncedAll()
 	if err != nil {
 		log.Printf("syncer: realtime query: %v", err)
 		return
+	}
+	if len(sessions) == 0 {
+		// Nothing queued — flush the current open session to make it syncable.
+		s.mon.FlushCurrentSession(now)
+		sessions, err = s.db.UnsyncedAll()
+		if err != nil {
+			log.Printf("syncer: realtime query after flush: %v", err)
+			return
+		}
 	}
 	if len(sessions) == 0 {
 		return
