@@ -28,8 +28,11 @@ LOC_AGENT_SRC   := ./launchd/$(LOC_AGENT_LABEL).plist
 LOC_AGENT_DST   := /Library/LaunchAgents/$(LOC_AGENT_LABEL).plist
 ENTITLEMENTS    := ./entitlements/location-helper.plist
 LOC_INFO_PLIST  := ./entitlements/location-helper-info.plist
+# Minimum macOS version for the location helper binary.
+# Set to 13.0 (Ventura) so the binary runs on Ventura and older releases.
+MACOS_MIN_VERSION := 13.0
 # Embed Info.plist so macOS TCC can show the location permission dialog.
-LOC_LDFLAGS := -ldflags "-s -w -extldflags '-sectcreate __TEXT __info_plist $(CURDIR)/$(LOC_INFO_PLIST)'"
+LOC_LDFLAGS := -ldflags "-s -w -extldflags '-sectcreate __TEXT __info_plist $(CURDIR)/$(LOC_INFO_PLIST) -mmacosx-version-min=$(MACOS_MIN_VERSION)'"
 
 LDFLAGS := -ldflags "-s -w"   # strip debug info → smaller binary
 
@@ -129,9 +132,9 @@ build-all: build build-linux build-linux-arm64 build-windows build-windows-arm64
 
 # Location helper: runs as a user LaunchAgent to capture GPS via CoreLocation.
 build-location:
-	@echo "Building $(LOC_BINARY) (GOARCH=$(GOARCH))…"
+	@echo "Building $(LOC_BINARY) (GOARCH=$(GOARCH), min macOS=$(MACOS_MIN_VERSION))…"
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=1 GOOS=darwin GOARCH=$(GOARCH) \
+	MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) CGO_ENABLED=1 GOOS=darwin GOARCH=$(GOARCH) \
 		go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY) $(LOC_CMD_PATH)
 	@echo "→ $(BIN_DIR)/$(LOC_BINARY) (unsigned; run scripts/make-location-app.sh to sign)"
 
@@ -163,10 +166,10 @@ build-universal:
 	@mkdir -p $(BIN_DIR)
 	# Compile ARM64
 	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-arm64 $(CMD_PATH)
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-arm64 $(LOC_CMD_PATH)
+	MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-arm64 $(LOC_CMD_PATH)
 	# Compile AMD64
 	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-amd64 $(CMD_PATH)
-	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-amd64 $(LOC_CMD_PATH)
+	MACOSX_DEPLOYMENT_TARGET=$(MACOS_MIN_VERSION) CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(LOC_LDFLAGS) -o $(BIN_DIR)/$(LOC_BINARY)-amd64 $(LOC_CMD_PATH)
 	# Lipo into single universal binaries
 	lipo -create -output $(BIN_DIR)/$(BINARY) $(BIN_DIR)/$(BINARY)-arm64 $(BIN_DIR)/$(BINARY)-amd64
 	lipo -create -output $(BIN_DIR)/$(LOC_BINARY) $(BIN_DIR)/$(LOC_BINARY)-arm64 $(BIN_DIR)/$(LOC_BINARY)-amd64
