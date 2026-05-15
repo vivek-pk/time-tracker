@@ -17,9 +17,7 @@ import (
 
 // runTracker contains the core application logic, shared between all platforms.
 func runTracker(stopCh chan struct{}) {
-	envFile := envOrDefault("ENV_FILE", config.DefaultEnvFilePath())
-
-	cfg, err := config.Load(envFile)
+	cfg, err := config.Load("")
 	if err != nil {
 		log.Fatalf("time-tracker: config error: %v", err)
 	}
@@ -30,7 +28,7 @@ func runTracker(stopCh chan struct{}) {
 	_ = os.MkdirAll(cfg.LogPath, 0o750)
 
 	// Open a log file so output is captured even when stderr is unavailable
-	// (e.g. Windows Services). Writes go to both stderr and the file.
+	// (e.g. Windows scheduled tasks). Writes go to both stderr and the file.
 	logFile, logErr := os.OpenFile(
 		filepath.Join(cfg.LogPath, "output.log"),
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
@@ -82,11 +80,4 @@ func runTracker(stopCh chan struct{}) {
 
 	wg.Wait()
 	log.Println("shutdown complete")
-}
-
-func envOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }

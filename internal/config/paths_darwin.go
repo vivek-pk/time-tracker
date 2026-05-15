@@ -10,8 +10,3 @@ func init() {
 		DefaultLogPath = "/var/log/time-tracker"
 	}
 }
-
-// defaultEnvFilePath returns the OS-specific default location for the .env file.
-func defaultEnvFilePath() string {
-	return "/etc/time-tracker/.env"
-}

@@ -47,6 +47,12 @@ if (Test-Path $binaryPath) {
     Remove-Item -Path $binaryPath -Force
 }
 
+$locationBinaryPath = "$InstallDir\time-tracker-location.exe"
+if (Test-Path $locationBinaryPath) {
+    Write-Host '  [+] Removing location helper'
+    Remove-Item -Path $locationBinaryPath -Force
+}
+
 # -- Remove data ----------------------------------------------------------
 if (-not $KeepData) {
     $response = Read-Host ('  [?] Delete all data, logs, and config at {0}? [y/N]' -f $InstallDir)

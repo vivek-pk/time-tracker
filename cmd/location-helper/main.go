@@ -22,7 +22,7 @@ typedef struct {
 @property (nonatomic, strong) CLLocation *fix;
 @property (nonatomic) BOOL done;
 @property (nonatomic) BOOL denied;
-@property (nonatomic) BOOL requested; // guard: only call requestLocation once
+@property (nonatomic) BOOL started;
 @end
 
 @implementation _TrackerLocHelper
@@ -65,8 +65,8 @@ typedef struct {
 #ifdef kCLAuthorizationStatusAuthorizedWhenInUse
     authorized = authorized || (s == kCLAuthorizationStatusAuthorizedWhenInUse);
 #endif
-    if (authorized && !self.requested) {
-        self.requested = YES;
+    if (authorized && !self.started) {
+        self.started = YES;
         [m startUpdatingLocation]; // restart after auth is confirmed
     }
 }
@@ -85,7 +85,15 @@ static LocResult fetchGPS(int timeoutSecs) {
     // This is a no-op when already authorized but required for the first-run prompt.
     NSApplication *app = [NSApplication sharedApplication];
     [app setActivationPolicy:NSApplicationActivationPolicyAccessory]; // no dock icon
-    [app activateIgnoringOtherApps:YES];
+    // activateIgnoringOtherApps: was deprecated in macOS 14.0
+    if (@available(macOS 14.0, *)) {
+        [app activate];
+    } else {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        [app activateIgnoringOtherApps:YES];
+        #pragma clang diagnostic pop
+    }
 
     CLLocationManager  *mgr    = [[CLLocationManager alloc] init];
     _TrackerLocHelper  *helper = [[_TrackerLocHelper alloc] init];
@@ -93,24 +101,23 @@ static LocResult fetchGPS(int timeoutSecs) {
     mgr.delegate        = helper;
     mgr.desiredAccuracy = kCLLocationAccuracyKilometer; // fast WiFi fix; plenty for attendance
 
-    // Check current authorization status — if already authorized, kick off
-    // requestLocation immediately; otherwise the delegate callback will do it
-    // once the user grants permission.
+    // Check current authorization status. On Monterey/Ventura, explicitly
+    // request authorization before starting updates; starting updates while
+    // NotDetermined is unreliable and can fail without showing the prompt.
     CLAuthorizationStatus cur = mgr.authorizationStatus;
-    BOOL alreadyAuthorized = (cur == kCLAuthorizationStatusAuthorized);
+    BOOL authorized = (cur == kCLAuthorizationStatusAuthorized);
 #ifdef kCLAuthorizationStatusAuthorizedWhenInUse
-    alreadyAuthorized = alreadyAuthorized || (cur == kCLAuthorizationStatusAuthorizedWhenInUse);
+    authorized = authorized || (cur == kCLAuthorizationStatusAuthorizedWhenInUse);
 #endif
     if (cur == kCLAuthorizationStatusDenied || cur == kCLAuthorizationStatusRestricted) {
         r.denied = 1; return r;
     }
-    // For CLI tools, calling requestLocation directly triggers the macOS
-    // permission prompt when status is NotDetermined. The auth delegate
-    // callback will call it again once authorized (guarded by helper.requested).
-    // Do NOT set helper.requested yet — let _handleStatus do that after auth.
-    // Use startUpdatingLocation rather than requestLocation: CLLMs with
-    // requestWhenInUse+NotDetermined can silently fail in non-bundle context.
-    [mgr startUpdatingLocation];
+    if (cur == kCLAuthorizationStatusNotDetermined) {
+        [mgr requestWhenInUseAuthorization];
+    } else if (authorized && !helper.started) {
+        helper.started = YES;
+        [mgr startUpdatingLocation];
+    }
 
     // Poll: spin the CF run loop until done or timeout.
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:(double)timeoutSecs];

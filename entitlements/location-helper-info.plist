@@ -8,6 +8,8 @@
     <string>time-tracker-location</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
+    <key>NSLocationUsageDescription</key>
+    <string>Time Tracker records your location at the start of each work session for attendance purposes.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Time Tracker records your location at the start of each work session for attendance purposes.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

@@ -78,6 +78,7 @@ Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
 
 # Run Installer
 $installerScript = Join-Path $tempDir "scripts\install-windows.ps1"
+$uninstallerScript = Join-Path $tempDir "scripts\uninstall-windows.ps1"
 $binaryPath = Join-Path $tempDir "time-tracker-windows-$fileArch.exe"
 $locationBinary = Join-Path $tempDir "time-tracker-location-windows-$fileArch.exe"
 
@@ -87,21 +88,10 @@ if (-not (Test-Path $installerScript)) {
 }
 
 Write-Host '  [+] Running installer script...'
-& $installerScript -BinaryPath $binaryPath
+& $installerScript -BinaryPath $binaryPath -LocationBinaryPath $locationBinary
 
-# Install location helper
-if (Test-Path $locationBinary) {
-    Write-Host '  [+] Installing location helper...'
-    Copy-Item $locationBinary "$InstallDir\time-tracker-location.exe" -Force
-
-    # Add to system PATH so the daemon can find it
-    $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    if ($currentPath -notlike "*time-tracker*") {
-        Write-Host ('  [+] Adding {0} to System PATH...' -f $InstallDir)
-        [Environment]::SetEnvironmentVariable("Path", "$currentPath;$InstallDir", "Machine")
-    }
-} else {
-    Write-Host '  [!] Location helper binary not found in archive. Falling back to IP-based location.' -ForegroundColor Yellow
+if (Test-Path $uninstallerScript) {
+    Copy-Item $uninstallerScript "$InstallDir\uninstall-windows.ps1" -Force
 }
 
 # Cleanup
@@ -110,7 +100,7 @@ Remove-Item -Path $tempDir -Recurse -Force
 
 Write-Host ""
 Write-Host '  [+] Time Tracker Installation Complete!' -ForegroundColor Green
-Write-Host '      - To check status: Get-Service TimeTracker'
+Write-Host '      - To check status: Get-ScheduledTask -TaskName TimeTracker'
 Write-Host ('      - Logs and config: {0}' -f $InstallDir)
 Write-Host '      - Please ensure Location Services are enabled in Windows Settings if you want GPS/WiFi accuracy.'
 Write-Host ""

@@ -43,6 +43,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
     <string>1.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSLocationUsageDescription</key>
+    <string>Time Tracker records your location at the start of each work session for attendance purposes.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Time Tracker records your location at the start of each work session for attendance purposes.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -64,4 +66,3 @@ echo "  open -W \"$APP\""
 echo ""
 echo "After granting, the binary works standalone:"
 echo "  $BINARY"
-

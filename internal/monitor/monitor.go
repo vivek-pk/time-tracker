@@ -181,7 +181,7 @@ func (m *Monitor) FlushCurrentSession(at time.Time) {
 // readLocation returns GPS coordinates from the location helper's output file.
 // Uses stale coordinates (with a warning) rather than returning 0,0.
 func (m *Monitor) readLocation() storage.LocationInfo {
-	info, stale, err := location.ReadValidatedFromFile(location.SharedFilePath)
+	info, stale, err := location.ReadValidatedFromFile(m.locPath)
 	if err != nil {
 		log.Printf("monitor: location read error: %v", err)
 		return storage.LocationInfo{}

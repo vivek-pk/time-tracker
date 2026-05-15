@@ -27,14 +27,15 @@ type lastInputInfo struct {
 // (not Session 0). The installer uses a Scheduled Task (not a Service)
 // to ensure this.
 //
-// Returns 0 (assume active) if the call fails.
+// Returns -1 if the call fails (consistent with macOS/Linux convention);
+// classifyState() treats -1 as "detection unavailable → default to active".
 func idleSeconds() float64 {
 	var lii lastInputInfo
 	lii.cbSize = uint32(unsafe.Sizeof(lii))
 
 	r1, _, _ := procGetLastInputInfo.Call(uintptr(unsafe.Pointer(&lii)))
 	if r1 == 0 {
-		return 0
+		return -1
 	}
 
 	r2, _, _ := procGetTickCount.Call()

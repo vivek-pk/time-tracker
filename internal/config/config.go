@@ -6,27 +6,18 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/joho/godotenv"
 )
 
 // These vars are injected at build time via -ldflags -X.
-// They act as the lowest-priority fallback; config.json and env vars override them.
+// They act as the lowest-priority fallback; embedded config.json overrides them.
 var (
 	DefaultSyncAPIURL = ""
 	DefaultSyncAPIKey = ""
 	DefaultDBPath     = "" // Set per-platform in paths_*.go init()
 	DefaultLogPath    = "" // Set per-platform in paths_*.go init()
 )
-
-// DefaultEnvFilePath returns the OS-specific default location for the .env file.
-func DefaultEnvFilePath() string {
-	return defaultEnvFilePath()
-}
 
 // embeddedConfigJSON is the config.json file baked into the binary at build time.
 // Edit internal/config/config.json with your API URL and key before building.
@@ -49,8 +40,8 @@ type jsonConfig struct {
 	RetentionDays        *int   `json:"retention_days,omitempty"`
 	SyncTimeoutSeconds   *int   `json:"sync_timeout_seconds,omitempty"`
 	RealtimeSync         *bool  `json:"realtime_sync,omitempty"`
-	GoogleGeoAPIKey      string   `json:"google_geolocation_api_key,omitempty"`
-	UnwiredLabsToken     string   `json:"unwired_labs_api_token,omitempty"`
+	GoogleGeoAPIKey      string `json:"google_geolocation_api_key,omitempty"`
+	UnwiredLabsToken     string `json:"unwired_labs_api_token,omitempty"`
 }
 
 // Config holds all runtime configuration.
@@ -74,40 +65,34 @@ type Config struct {
 
 // Load reads config with the following priority (highest wins):
 //
-//	1. Environment variables (including those set by .env file)
-//	2. Embedded config.json (baked into the binary at build time)
-//	3. Compiled-in defaults (set via -ldflags or hardcoded)
+//  1. Embedded config.json (baked into the binary at build time)
+//  2. Compiled-in defaults (set via -ldflags or hardcoded)
 func Load(envFilePath string) (*Config, error) {
-	// Step 1: Parse embedded config.json
+	_ = envFilePath // Kept for older diagnostic helpers; runtime .env loading is intentionally disabled.
+
+	// Step 1: Parse embedded config.json.
 	var jc jsonConfig
 	if err := json.Unmarshal(embeddedConfigJSON, &jc); err != nil {
 		log.Printf("config: embedded config.json parse error: %v (using defaults)", err)
 	}
 
-	// Step 2: Load optional .env file (sets env vars that take priority)
-	if envFilePath != "" {
-		if err := godotenv.Load(envFilePath); err != nil {
-			log.Printf("config: .env not found at %s, using embedded config", envFilePath)
-		}
-	}
-
-	// Step 3: Build config — env vars > config.json > compiled defaults
+	// Step 2: Build config — config.json > compiled defaults.
 	cfg := &Config{
 		MachineID:            machineID(),
-		SyncAPIURL:           strPriority("SYNC_API_URL", jc.SyncAPIURL, DefaultSyncAPIURL),
-		SyncAPIKey:           strPriority("SYNC_API_KEY", jc.SyncAPIKey, DefaultSyncAPIKey),
-		MorningSyncHour:      intPriority("MORNING_SYNC_HOUR", jc.MorningSyncHour, 6),
-		EveningSyncHour:      intPriority("EVENING_SYNC_HOUR", jc.EveningSyncHour, 18),
-		EveningSyncMinute:    intPriority("EVENING_SYNC_MINUTE", jc.EveningSyncMinute, 30),
-		IdleThresholdMinutes: intPriority("IDLE_THRESHOLD_MINUTES", jc.IdleThresholdMinutes, 5),
-		PollIntervalSeconds:  intPriority("POLL_INTERVAL_SECONDS", jc.PollIntervalSeconds, 30),
-		DBPath:               strPriority("DB_PATH", jc.DBPath, DefaultDBPath),
-		LogPath:              strPriority("LOG_PATH", jc.LogPath, DefaultLogPath),
-		RetentionDays:        intPriority("RETENTION_DAYS", jc.RetentionDays, 3),
-		SyncTimeoutSeconds:   intPriority("SYNC_TIMEOUT_SECONDS", jc.SyncTimeoutSeconds, 30),
-		RealtimeSync:         boolPriority("REALTIME_SYNC", jc.RealtimeSync, false),
-		GoogleGeoAPIKey:      strPriority("GOOGLE_GEOLOCATION_API_KEY", jc.GoogleGeoAPIKey, ""),
-		UnwiredLabsToken:     strPriority("UNWIRED_LABS_API_TOKEN", jc.UnwiredLabsToken, ""),
+		SyncAPIURL:           strConfig(jc.SyncAPIURL, DefaultSyncAPIURL),
+		SyncAPIKey:           strConfig(jc.SyncAPIKey, DefaultSyncAPIKey),
+		MorningSyncHour:      intConfig(jc.MorningSyncHour, 6),
+		EveningSyncHour:      intConfig(jc.EveningSyncHour, 18),
+		EveningSyncMinute:    intConfig(jc.EveningSyncMinute, 30),
+		IdleThresholdMinutes: intConfig(jc.IdleThresholdMinutes, 5),
+		PollIntervalSeconds:  intConfig(jc.PollIntervalSeconds, 30),
+		DBPath:               strConfig(jc.DBPath, DefaultDBPath),
+		LogPath:              strConfig(jc.LogPath, DefaultLogPath),
+		RetentionDays:        intConfig(jc.RetentionDays, 3),
+		SyncTimeoutSeconds:   intConfig(jc.SyncTimeoutSeconds, 30),
+		RealtimeSync:         boolConfig(jc.RealtimeSync, false),
+		GoogleGeoAPIKey:      strConfig(jc.GoogleGeoAPIKey, ""),
+		UnwiredLabsToken:     strConfig(jc.UnwiredLabsToken, ""),
 	}
 	return cfg, cfg.validate()
 }
@@ -124,72 +109,41 @@ func (c *Config) SyncTimeout() time.Duration {
 
 func (c *Config) validate() error {
 	if c.SyncAPIURL == "" {
-		return fmt.Errorf("SYNC_API_URL must be set")
+		return fmt.Errorf("sync_api_url must be set in config.json")
 	}
 	if !strings.HasPrefix(c.SyncAPIURL, "http://") && !strings.HasPrefix(c.SyncAPIURL, "https://") {
-		return fmt.Errorf("SYNC_API_URL must start with http:// or https://")
+		return fmt.Errorf("sync_api_url must start with http:// or https://")
 	}
 	if c.SyncAPIKey == "" {
-		log.Println("config: WARNING — SYNC_API_KEY is empty; API requests will be unauthenticated")
+		log.Println("config: WARNING — sync_api_key is empty; API requests will be unauthenticated")
 	}
 	if c.IdleThresholdMinutes < 1 {
-		return fmt.Errorf("IDLE_THRESHOLD_MINUTES must be >= 1")
+		return fmt.Errorf("idle_threshold_minutes must be >= 1")
 	}
 	if c.PollIntervalSeconds < 5 {
-		return fmt.Errorf("POLL_INTERVAL_SECONDS must be >= 5")
+		return fmt.Errorf("poll_interval_seconds must be >= 5")
 	}
 	return nil
 }
 
-// strPriority returns: env var > jsonVal > compiled default.
-func strPriority(envKey, jsonVal, def string) string {
-	if v := os.Getenv(envKey); v != "" {
-		return v
-	}
+// strConfig returns: config.json value > compiled default.
+func strConfig(jsonVal, def string) string {
 	if jsonVal != "" {
 		return jsonVal
 	}
 	return def
 }
 
-// intPriority returns: env var > jsonVal > compiled default.
-func intPriority(envKey string, jsonVal *int, def int) int {
-	if s := os.Getenv(envKey); s != "" {
-		n, err := strconv.Atoi(strings.TrimSpace(s))
-		if err != nil {
-			log.Printf("config: invalid int for %s, using default", envKey)
-		} else {
-			return n
-		}
-	}
+// intConfig returns: config.json value > compiled default.
+func intConfig(jsonVal *int, def int) int {
 	if jsonVal != nil {
 		return *jsonVal
 	}
 	return def
 }
 
-// boolPriority returns: env var > jsonVal > compiled default.
-func boolPriority(envKey string, jsonVal *bool, def bool) bool {
-	if s := os.Getenv(envKey); s != "" {
-		s = strings.TrimSpace(strings.ToLower(s))
-		return s == "true" || s == "1" || s == "yes"
-	}
-	if jsonVal != nil {
-		return *jsonVal
-	}
-	return def
-}
-
-// floatPriority returns: env var > jsonVal > compiled default.
-func floatPriority(envKey string, jsonVal *float64, def float64) float64 {
-	if s := os.Getenv(envKey); s != "" {
-		f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
-		if err != nil {
-			log.Printf("config: invalid float for %s, using default", envKey)
-		} else {
-			return f
-		}
-	}
+// boolConfig returns: config.json value > compiled default.
+func boolConfig(jsonVal *bool, def bool) bool {
 	if jsonVal != nil {
 		return *jsonVal
 	}

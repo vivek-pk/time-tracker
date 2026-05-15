@@ -9,11 +9,9 @@
 # 1. Verifies it is running as root.
 # 2. Creates the required directories with correct ownership.
 # 3. Copies the binary to /usr/local/bin.
-# 4. Installs the .env config template to /etc/time-tracker/.env
-#    (only if one does not already exist, to preserve operator edits).
-# 5. Copies the launchd plist to /Library/LaunchDaemons.
-# 6. Sets strict permissions on the plist (root:wheel 0644).
-# 7. Loads (or reloads) the daemon.
+# 4. Copies the launchd plist to /Library/LaunchDaemons.
+# 5. Sets strict permissions on the plist (root:wheel 0644).
+# 6. Loads (or reloads) the daemon.
 
 set -euo pipefail
 
@@ -29,11 +27,8 @@ AGENT_SRC="./launchd/com.timetracker.locationhelper.plist"
 AGENT_DST="/Library/LaunchAgents/com.timetracker.locationhelper.plist"
 AGENT_LABEL="com.timetracker.locationhelper"
 ENTITLEMENTS="./entitlements/location-helper.plist"
-ENV_SRC="./.env.example"
-ENV_DST="/etc/time-tracker/.env"
 DB_DIR="/var/lib/time-tracker"
 LOG_DIR="/var/log/time-tracker"
-CONF_DIR="/etc/time-tracker"
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 info()  { echo "  [+] $*"; }
@@ -52,7 +47,7 @@ fi
 
 # ── create directories ────────────────────────────────────────────────────────
 info "Creating directories"
-for dir in "$DB_DIR" "$LOG_DIR" "$CONF_DIR"; do
+for dir in "$DB_DIR" "$LOG_DIR"; do
     mkdir -p "$dir"
     chown root:wheel "$dir"
     chmod 750 "$dir"
@@ -86,10 +81,6 @@ if [[ -d "$LOC_APP_SRC" ]]; then
 else
     warn "Location app bundle not found at $LOC_APP_SRC — skipping"
 fi
-
-# ── install config (only if not already present) ──────────────────────────────
-# (Config is now embedded via config.json, .env is skipped)
-
 
 # ── install plist ─────────────────────────────────────────────────────────────
 info "Installing daemon plist → $PLIST_DST"

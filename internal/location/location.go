@@ -3,13 +3,12 @@ package location
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"time"
 )
 
 // SharedFilePath is where the location helper writes and the system daemon reads.
-// Uses /tmp/ (symlink to /private/tmp/) which is accessible to both root daemon
-// and user LaunchAgent processes.
-var SharedFilePath = "/tmp/time-tracker-location.json"
+var SharedFilePath = sharedFilePath()
 
 // Info holds GPS coordinates captured by the location helper.
 type Info struct {
@@ -45,6 +44,9 @@ func ReadFromFile(path string) (Info, error) {
 func WriteToFile(path string, info Info) error {
 	data, err := json.MarshalIndent(info, "", "  ")
 	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, 0o600)

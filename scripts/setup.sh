@@ -22,7 +22,6 @@ DAEMON_PLIST="/Library/LaunchDaemons/com.timetracker.daemon.plist"
 DAEMON_LABEL="com.timetracker.daemon"
 AGENT_PLIST="/Library/LaunchAgents/com.timetracker.locationhelper.plist"
 AGENT_LABEL="com.timetracker.locationhelper"
-ENV_DST="/etc/time-tracker/.env"
 DB_DIR="/var/lib/time-tracker"
 LOG_DIR="/var/log/time-tracker"
 CONF_DIR="/etc/time-tracker"
@@ -167,11 +166,6 @@ write_daemon_plist() {
     <array>
         <string>/usr/local/bin/time-tracker</string>
     </array>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>ENV_FILE</key>
-        <string>/etc/time-tracker/.env</string>
-    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -316,7 +310,7 @@ do_install() {
     mkdir -p /usr/local/bin
     chown root:wheel /usr/local/bin
     chmod 755 /usr/local/bin
-    for dir in "$DB_DIR" "$LOG_DIR" "$CONF_DIR"; do
+    for dir in "$DB_DIR" "$LOG_DIR"; do
         mkdir -p "$dir"
         chown root:wheel "$dir"
         chmod 750 "$dir"
@@ -499,7 +493,7 @@ show_success_box() {
     # Quick reference
     printf "  ${BOLD}${WHITE}  Quick Reference${RESET}\n"
     echo ""
-    printf "  ${GRAY}  Config file   ${WHITE}/etc/time-tracker/.env ${DIM}(optional override)${RESET}\n"
+    printf "  ${GRAY}  Config       ${WHITE}embedded config.json${RESET}\n"
     printf "  ${GRAY}  Logs          ${WHITE}${LOG_DIR}/output.log${RESET}\n"
     printf "  ${GRAY}  Database      ${WHITE}${DB_DIR}/tracker.db${RESET}\n"
     printf "  ${GRAY}  Machine ID    ${CYAN}${BOLD}${machine_id}${RESET}\n"

@@ -259,13 +259,13 @@ logs-err:
 
 else
 reload stop status logs logs-err:
-	@echo "Use Windows Service Manager (services.msc) to manage the time-tracker service."
+	@echo "Use Task Scheduler to manage the TimeTracker scheduled task."
 endif
 
 # ── Dev helpers ────────────────────────────────────────────────────────────────
-# Run locally (reads .env from the current directory).
+# Run locally (uses embedded config.json).
 run: build
-	ENV_FILE=./.env $(BIN_DIR)/$(BINARY)
+	$(BIN_DIR)/$(BINARY)
 
 clean:
 	rm -rf $(BIN_DIR)

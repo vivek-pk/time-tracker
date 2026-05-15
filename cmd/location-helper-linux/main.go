@@ -66,8 +66,9 @@ func fetchGeoClue2() (location.Info, error) {
 		return location.Info{}, fmt.Errorf("gdbus not found: GeoClue2 requires gdbus CLI tool")
 	}
 
-	// Step 1: Create a GeoClue2 client
-	out, err := exec.Command("gdbus", "call", "--session",
+	// Step 1: Create a GeoClue2 client. GeoClue2 is exposed on the system bus,
+	// which keeps this working from a systemd service as well as a terminal.
+	out, err := exec.Command("gdbus", "call", "--system",
 		"--dest", "org.freedesktop.GeoClue2",
 		"--object-path", "/org/freedesktop/GeoClue2/Manager",
 		"--method", "org.freedesktop.GeoClue2.Manager.GetClient",
@@ -83,7 +84,7 @@ func fetchGeoClue2() (location.Info, error) {
 	}
 
 	// Step 2: Set DesktopId (required by GeoClue2)
-	exec.Command("gdbus", "call", "--session",
+	exec.Command("gdbus", "call", "--system",
 		"--dest", "org.freedesktop.GeoClue2",
 		"--object-path", clientPath,
 		"--method", "org.freedesktop.DBus.Properties.Set",
@@ -92,7 +93,7 @@ func fetchGeoClue2() (location.Info, error) {
 	).Run()
 
 	// Step 3: Set requested accuracy level (city-level is fine for attendance)
-	exec.Command("gdbus", "call", "--session",
+	exec.Command("gdbus", "call", "--system",
 		"--dest", "org.freedesktop.GeoClue2",
 		"--object-path", clientPath,
 		"--method", "org.freedesktop.DBus.Properties.Set",
@@ -101,7 +102,7 @@ func fetchGeoClue2() (location.Info, error) {
 	).Run()
 
 	// Step 4: Start the client (triggers location acquisition)
-	out, err = exec.Command("gdbus", "call", "--session",
+	out, err = exec.Command("gdbus", "call", "--system",
 		"--dest", "org.freedesktop.GeoClue2",
 		"--object-path", clientPath,
 		"--method", "org.freedesktop.GeoClue2.Client.Start",
@@ -115,7 +116,7 @@ func fetchGeoClue2() (location.Info, error) {
 	for time.Now().Before(deadline) {
 		time.Sleep(1 * time.Second)
 
-		out, err = exec.Command("gdbus", "call", "--session",
+		out, err = exec.Command("gdbus", "call", "--system",
 			"--dest", "org.freedesktop.GeoClue2",
 			"--object-path", clientPath,
 			"--method", "org.freedesktop.DBus.Properties.Get",
@@ -134,7 +135,7 @@ func fetchGeoClue2() (location.Info, error) {
 		info, err := readGeoClueLocation(locPath)
 
 		// Step 7: Stop the client (cleanup)
-		exec.Command("gdbus", "call", "--session",
+		exec.Command("gdbus", "call", "--system",
 			"--dest", "org.freedesktop.GeoClue2",
 			"--object-path", clientPath,
 			"--method", "org.freedesktop.GeoClue2.Client.Stop",
@@ -144,7 +145,7 @@ func fetchGeoClue2() (location.Info, error) {
 	}
 
 	// Cleanup on timeout
-	exec.Command("gdbus", "call", "--session",
+	exec.Command("gdbus", "call", "--system",
 		"--dest", "org.freedesktop.GeoClue2",
 		"--object-path", clientPath,
 		"--method", "org.freedesktop.GeoClue2.Client.Stop",
@@ -155,7 +156,7 @@ func fetchGeoClue2() (location.Info, error) {
 
 // readGeoClueLocation reads lat/lon/accuracy from a GeoClue2 Location object.
 func readGeoClueLocation(locPath string) (location.Info, error) {
-	out, err := exec.Command("gdbus", "call", "--session",
+	out, err := exec.Command("gdbus", "call", "--system",
 		"--dest", "org.freedesktop.GeoClue2",
 		"--object-path", locPath,
 		"--method", "org.freedesktop.DBus.Properties.GetAll",

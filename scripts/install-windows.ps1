@@ -4,7 +4,8 @@
 # Usage: .\scripts\install-windows.ps1 [-BinaryPath .\bin\time-tracker.exe]
 
 param(
-    [string]$BinaryPath = ".\bin\time-tracker.exe"
+    [string]$BinaryPath = ".\bin\time-tracker.exe",
+    [string]$LocationBinaryPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,6 +15,7 @@ $TaskName    = "TimeTracker"
 $Description = "Monitors keyboard/mouse activity and syncs attendance data."
 $InstallDir  = "$env:ProgramData\time-tracker"
 $BinaryDst   = "$InstallDir\time-tracker.exe"
+$LocationDst = "$InstallDir\time-tracker-location.exe"
 $DbDir       = "$InstallDir"
 $LogDir      = "$InstallDir\logs"
 
@@ -58,6 +60,20 @@ New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 # -- Install binary -------------------------------------------------------
 Write-Host ('  [+] Installing binary -> {0}' -f $BinaryDst)
 Copy-Item -Path $BinaryPath -Destination $BinaryDst -Force
+
+# -- Install location helper before the task starts -------------------------
+if ($LocationBinaryPath -and (Test-Path $LocationBinaryPath)) {
+    Write-Host ('  [+] Installing location helper -> {0}' -f $LocationDst)
+    Copy-Item -Path $LocationBinaryPath -Destination $LocationDst -Force
+
+    $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    if ($currentPath -notlike "*$InstallDir*") {
+        Write-Host ('  [+] Adding {0} to System PATH...' -f $InstallDir)
+        [Environment]::SetEnvironmentVariable("Path", "$currentPath;$InstallDir", "Machine")
+    }
+} else {
+    Write-Host '  [!] Location helper not provided. Location will use IP geolocation fallback.' -ForegroundColor Yellow
+}
 
 # -- Create Scheduled Task ------------------------------------------------
 # Runs in the user's desktop session (NOT Session 0) so idle detection works.

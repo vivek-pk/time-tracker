@@ -1,6 +1,6 @@
 # Time Tracker — Single-Command Setup Guide
 
-You can install and uninstall the Time Tracker on any platform using a single line of code in your terminal. This will automatically download the correct architecture (Intel/ARM), extract it, install the background service, and add the location helper.
+You can install and uninstall the Time Tracker on any platform using a single line of code in your terminal. This will automatically download the correct architecture (Intel/ARM), extract it, install the background daemon/task, and add the location helper.
 
 ## macOS
 
@@ -56,7 +56,7 @@ $f="$env:TEMP\tt-setup.ps1"; Invoke-WebRequest -UseBasicParsing -Uri "https://gi
 
 **View Logs:**
 ```powershell
-Get-EventLog -LogName Application -Source TimeTracker -Newest 50
+Get-Content "C:\ProgramData\time-tracker\logs\output.log" -Tail 50 -Wait
 ```
 
 ---
@@ -86,5 +86,5 @@ journalctl -u time-tracker -f
 1. Detect your system's architecture (`amd64` vs `arm64`)
 2. Download the appropriate compiled release from GitHub.
 3. Place the binaries in standard OS locations (`/usr/local/bin` for Unix, `C:\ProgramData` for Windows).
-4. Register and start the background daemon (`launchd` on macOS, `systemd` on Linux, `Windows Services` on Windows).
+4. Register and start the background daemon/task (`launchd` on macOS, `systemd` on Linux, Scheduled Task on Windows).
 5. Clean up all temporary files used during installation.

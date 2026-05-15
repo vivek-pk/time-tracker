@@ -96,11 +96,6 @@ sudo tee /Library/LaunchDaemons/com.timetracker.daemon.plist > /dev/null << 'EOF
     <array>
         <string>/usr/local/bin/time-tracker</string>
     </array>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>ENV_FILE</key>
-        <string>/etc/time-tracker/.env</string>
-    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -128,7 +123,7 @@ sudo chmod 644 /Library/LaunchDaemons/com.timetracker.daemon.plist
 **5. Create directories and start**
 
 ```bash
-sudo mkdir -p /var/lib/time-tracker /var/log/time-tracker /etc/time-tracker
+sudo mkdir -p /var/lib/time-tracker /var/log/time-tracker
 sudo launchctl load -w /Library/LaunchDaemons/com.timetracker.daemon.plist
 ```
 
@@ -162,7 +157,6 @@ sudo rm -rf /Applications/time-tracker-location.app
 # Remove data (optional — prompts you)
 sudo rm -rf /var/lib/time-tracker    # database
 sudo rm -rf /var/log/time-tracker    # logs
-sudo rm -rf /etc/time-tracker        # config
 ```
 
 ---
@@ -219,8 +213,6 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/time-tracker
-EnvironmentFile=-/etc/time-tracker/.env
-Environment=ENV_FILE=/etc/time-tracker/.env
 Restart=always
 RestartSec=10
 Nice=10
@@ -238,19 +230,10 @@ WantedBy=multi-user.target
 EOF
 ```
 
-**4. Create directories and config**
+**4. Create directories**
 
 ```bash
-sudo mkdir -p /var/lib/time-tracker /var/log/time-tracker /etc/time-tracker
-
-# Create optional .env override file
-sudo tee /etc/time-tracker/.env > /dev/null << 'EOF'
-# Uncomment and edit ONLY if you need to override the embedded defaults.
-# SYNC_API_URL=https://your-api-endpoint.example.com/attendance
-# SYNC_API_KEY=
-EOF
-
-sudo chmod 640 /etc/time-tracker/.env
+sudo mkdir -p /var/lib/time-tracker /var/log/time-tracker
 ```
 
 **5. Enable and start**
@@ -312,7 +295,6 @@ sudo rm -f /usr/local/bin/time-tracker-location
 # Remove data (optional)
 sudo rm -rf /var/lib/time-tracker    # database
 sudo rm -rf /var/log/time-tracker    # logs
-sudo rm -rf /etc/time-tracker        # config
 ```
 
 ---
@@ -334,7 +316,7 @@ This script will automatically:
 2. Download and extract the latest release
 3. Install the daemon binary and location helper
 4. Add the installation directory to your System PATH
-5. Create and start a background **Windows Service** named `TimeTracker`
+5. Create and start a background **Scheduled Task** named `TimeTracker`
 
 ### Manual Install (From Release)
 
@@ -359,9 +341,8 @@ cd C:\time-tracker-setup
 This will:
 1. Create `C:\ProgramData\time-tracker\` directory
 2. Copy the binary to `C:\ProgramData\time-tracker\time-tracker.exe`
-3. Create a **Windows Service** named "TimeTracker" (auto-starts on boot)
-4. Configure auto-restart on failure
-5. Start the service
+3. Create a **Scheduled Task** named "TimeTracker" (starts at user logon)
+4. Start the task in the current desktop session
 
 **3. Install the location helper (optional)**
 
@@ -386,10 +367,10 @@ Settings → Privacy & Security → Location → Turn ON "Location services"
 **5. Verify it's running**
 
 ```powershell
-Get-Service TimeTracker
+Get-ScheduledTask -TaskName TimeTracker
 ```
 
-You should see `Status: Running`.
+You should see `State: Running`.
 
 ### Location Helper — Windows
 
@@ -422,9 +403,9 @@ cd C:\time-tracker-setup
 **Manual uninstall:**
 
 ```powershell
-# Stop and remove the service
-Stop-Service TimeTracker -Force
-sc.exe delete TimeTracker
+# Stop and remove the scheduled task
+Stop-ScheduledTask -TaskName TimeTracker
+Unregister-ScheduledTask -TaskName TimeTracker -Confirm:$false
 
 # Remove files (prompts for confirmation)
 Remove-Item -Path "C:\ProgramData\time-tracker" -Recurse -Force
@@ -439,39 +420,23 @@ $newPath = ($currentPath -split ";" | Where-Object { $_ -notlike "*time-tracker*
 
 ## Configuration
 
-All configuration is **embedded in the binary** at build time. No `.env` file is required on the target machine.
-
-To override settings on a specific machine, create an optional `.env` file:
-
-| Platform | Config Path |
-|----------|-------------|
-| macOS | `/etc/time-tracker/.env` |
-| Linux | `/etc/time-tracker/.env` |
-| Windows | `C:\ProgramData\time-tracker\.env` |
+All runtime configuration comes from the embedded `internal/config/config.json` file baked into the binary at build time. Runtime `.env` overrides are intentionally disabled so every platform uses the same config source.
 
 ### Configuration Options
 
-```env
-# ── Required ──────────────────────────────────────────────────────────────────
-SYNC_API_URL=https://your-api-endpoint.example.com/attendance
-
-# ── Authentication ────────────────────────────────────────────────────────────
-SYNC_API_KEY=your-api-key
-
-# ── Sync Schedule ─────────────────────────────────────────────────────────────
-MORNING_SYNC_HOUR=6            # Push previous day's data at this hour
-EVENING_SYNC_HOUR=18           # Push today's data at this hour
-EVENING_SYNC_MINUTE=30         # ... and this minute
-
-# ── Activity Detection ────────────────────────────────────────────────────────
-IDLE_THRESHOLD_MINUTES=5       # Seconds of no input → "idle" state
-POLL_INTERVAL_SECONDS=30       # How often to check idle status
-
-# ── Storage ───────────────────────────────────────────────────────────────────
-DB_PATH=/var/lib/time-tracker/tracker.db   # SQLite database location
-LOG_PATH=/var/log/time-tracker             # Log directory
-RETENTION_DAYS=15              # Delete synced sessions older than this
-SYNC_TIMEOUT_SECONDS=30        # HTTP timeout for API calls
+```json
+{
+  "sync_api_url": "https://your-api-endpoint.example.com/attendance",
+  "sync_api_key": "your-api-key",
+  "morning_sync_hour": 6,
+  "evening_sync_hour": 18,
+  "evening_sync_minute": 30,
+  "idle_threshold_minutes": 5,
+  "poll_interval_seconds": 30,
+  "retention_days": 15,
+  "sync_timeout_seconds": 30,
+  "realtime_sync": false
+}
 ```
 
 After editing the config, restart the service:
@@ -484,7 +449,8 @@ sudo launchctl kickstart -k system/com.timetracker.daemon
 sudo systemctl restart time-tracker
 
 # Windows (PowerShell as Admin)
-Restart-Service TimeTracker
+Stop-ScheduledTask -TaskName TimeTracker
+Start-ScheduledTask -TaskName TimeTracker
 ```
 
 ---
@@ -518,11 +484,11 @@ The location helper binary is **optional**. If not installed, the daemon uses IP
 
 | Action | macOS | Linux | Windows |
 |--------|-------|-------|---------|
-| **Start** | `sudo launchctl load -w /Library/LaunchDaemons/com.timetracker.daemon.plist` | `sudo systemctl start time-tracker` | `Start-Service TimeTracker` |
-| **Stop** | `sudo launchctl unload /Library/LaunchDaemons/com.timetracker.daemon.plist` | `sudo systemctl stop time-tracker` | `Stop-Service TimeTracker` |
-| **Restart** | `sudo launchctl kickstart -k system/com.timetracker.daemon` | `sudo systemctl restart time-tracker` | `Restart-Service TimeTracker` |
-| **Status** | `sudo launchctl list \| grep timetracker` | `systemctl status time-tracker` | `Get-Service TimeTracker` |
-| **Logs** | `tail -f /var/log/time-tracker/output.log` | `journalctl -u time-tracker -f` | `Get-EventLog -LogName Application -Source TimeTracker` |
+| **Start** | `sudo launchctl load -w /Library/LaunchDaemons/com.timetracker.daemon.plist` | `sudo systemctl start time-tracker` | `Start-ScheduledTask -TaskName TimeTracker` |
+| **Stop** | `sudo launchctl unload /Library/LaunchDaemons/com.timetracker.daemon.plist` | `sudo systemctl stop time-tracker` | `Stop-ScheduledTask -TaskName TimeTracker` |
+| **Restart** | `sudo launchctl kickstart -k system/com.timetracker.daemon` | `sudo systemctl restart time-tracker` | `Stop-ScheduledTask -TaskName TimeTracker; Start-ScheduledTask -TaskName TimeTracker` |
+| **Status** | `sudo launchctl list \| grep timetracker` | `systemctl status time-tracker` | `Get-ScheduledTask -TaskName TimeTracker` |
+| **Logs** | `tail -f /var/log/time-tracker/output.log` | `journalctl -u time-tracker -f` | `Get-Content "C:\ProgramData\time-tracker\logs\output.log" -Tail 50 -Wait` |
 
 ---
 

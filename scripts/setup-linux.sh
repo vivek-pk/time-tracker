@@ -33,7 +33,7 @@ if [[ "${1:-}" == "--uninstall" ]]; then
             # We don't want prompts for the silent uninstaller, so we export a variable to bypass
             # but currently uninstall-linux.sh prompts. For a single command uninstall, we just call it.
             # To prevent hanging, we can auto-answer 'y' or 'n'.
-            echo "y" | echo "y" | bash "$TMP_DIR/uninstall-linux.sh"
+            printf "y\ny\n" | bash "$TMP_DIR/uninstall-linux.sh"
         else
             # Manual fallback
             systemctl stop time-tracker 2>/dev/null || true
