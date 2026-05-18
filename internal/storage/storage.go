@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -176,6 +177,43 @@ func (d *DB) UnsyncedAll() ([]Session, error) {
 	}
 	defer rows.Close()
 	return scanSessions(rows)
+}
+
+// LastSyncedByDate returns the most recently ended synced session for each of
+// the provided dates. The result is a map keyed by date string. Dates with no
+// synced session are omitted from the map.
+func (d *DB) LastSyncedByDate(dates []string) (map[string]Session, error) {
+	if len(dates) == 0 {
+		return nil, nil
+	}
+	// Build a parameterised IN clause.
+	placeholders := make([]string, len(dates))
+	args := make([]interface{}, len(dates))
+	for i, dt := range dates {
+		placeholders[i] = "?"
+		args[i] = dt
+	}
+	query := `SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude
+		FROM sessions
+		WHERE synced = 1 AND end_time IS NOT NULL AND date IN (` +
+		strings.Join(placeholders, ",") + `)
+		GROUP BY date
+		HAVING end_time = MAX(end_time)
+		ORDER BY date`
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	sessions, err := scanSessions(rows)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]Session, len(sessions))
+	for _, s := range sessions {
+		m[s.Date] = s
+	}
+	return m, nil
 }
 
 // UnsyncedUpToDate returns closed, unsynced sessions with date <= date.

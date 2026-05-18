@@ -194,11 +194,27 @@ func (s *Syncer) realtimeSync(now time.Time) {
 
 // push sends sessions to the API with up to 3 retries.
 func (s *Syncer) push(syncType string, sessions []storage.Session) error {
+	// Collect the unique dates present in this batch so we can look up the
+	// last synced session per date. This gives mergeShortSessions context for
+	// short blips that appear at the start of a batch (no unsynced predecessor).
+	dateSet := make(map[string]struct{}, 4)
+	for _, ss := range sessions {
+		dateSet[ss.Date] = struct{}{}
+	}
+	dates := make([]string, 0, len(dateSet))
+	for d := range dateSet {
+		dates = append(dates, d)
+	}
+	predecessors, err := s.db.LastSyncedByDate(dates)
+	if err != nil {
+		log.Printf("syncer: predecessor lookup failed (continuing without context): %v", err)
+		predecessors = nil
+	}
 	// Normalise payload: absorb short blips into their predecessor, then
 	// collapse consecutive same-state sessions into a single entry.
 	// The original sessions slice is kept intact for MarkSynced below so
 	// every row — including absorbed ones — is marked synced in the local DB.
-	normalised := collapseConsecutive(mergeShortSessions(sessions, 5*time.Minute))
+	normalised := collapseConsecutive(mergeShortSessions(sessions, 5*time.Minute, predecessors))
 	log.Printf("syncer: normalised %d raw session(s) → %d session(s) for push", len(sessions), len(normalised))
 	payload := syncRequest{
 		SyncType: syncType,
@@ -304,10 +320,14 @@ func (s *Syncer) prune() {
 //   - If the run's combined duration < minDur the whole run is absorbed into
 //     the preceding session (no time is lost — the preceding session's EndTime
 //     is advanced to the last absorbed session's EndTime).
-//   - If no preceding session exists the run is kept as-is.
+//   - If no same-day preceding session exists in the unsynced batch,
+//     predecessors (keyed by date) provides the last synced session per date
+//     as context. Short runs absorbed into a synced predecessor are dropped
+//     from the output entirely — the preceding session was already sent to the
+//     API, so the blip time is silently folded into it.
 //
 // Sessions whose individual duration >= minDur are always kept unchanged.
-func mergeShortSessions(sessions []storage.Session, minDur time.Duration) []storage.Session {
+func mergeShortSessions(sessions []storage.Session, minDur time.Duration, predecessors map[string]storage.Session) []storage.Session {
 	if len(sessions) == 0 {
 		return sessions
 	}
@@ -327,16 +347,22 @@ func mergeShortSessions(sessions []storage.Session, minDur time.Duration) []stor
 			j++
 		}
 		runEnd := sessions[j-1].EndTime
+		date := sessions[i].Date
 		if runTotal >= minDur {
 			// Collectively significant — keep every session unchanged.
 			out = append(out, sessions[i:j]...)
-		} else if len(out) > 0 && out[len(out)-1].Date == sessions[i].Date {
-			// Insignificant blip on the same calendar day — absorb into the preceding session.
+		} else if len(out) > 0 && out[len(out)-1].Date == date {
+			// Insignificant blip — absorb into the preceding unsynced session.
 			log.Printf("syncer: absorbing %d short session(s) (%s total) into preceding %s session",
 				j-i, runTotal.Round(time.Second), out[len(out)-1].State)
 			out[len(out)-1].EndTime = runEnd
+		} else if _, hasPred := predecessors[date]; hasPred {
+			// No unsynced predecessor, but the last synced session on this date
+			// is the natural predecessor — drop the blip (already accounted for).
+			log.Printf("syncer: dropping %d short session(s) (%s total) absorbed into already-synced predecessor",
+				j-i, runTotal.Round(time.Second))
 		} else {
-			// No same-day preceding session — keep as-is.
+			// No predecessor at all — keep as-is.
 			out = append(out, sessions[i:j]...)
 		}
 		i = j
