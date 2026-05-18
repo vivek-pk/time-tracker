@@ -1,7 +1,6 @@
 package config
 
 import (
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,12 +17,6 @@ var (
 	DefaultDBPath     = "" // Set per-platform in paths_*.go init()
 	DefaultLogPath    = "" // Set per-platform in paths_*.go init()
 )
-
-// embeddedConfigJSON is the config.json file baked into the binary at build time.
-// Edit internal/config/config.json with your API URL and key before building.
-//
-//go:embed config.json
-var embeddedConfigJSON []byte
 
 // jsonConfig mirrors config.json structure. Pointer types for ints let us
 // distinguish "not set" from "set to 0".

@@ -65,7 +65,7 @@ PROD_LDFLAGS := -ldflags "-s -w \
   -X '$(CFG_PKG).DefaultDBPath=$(DB_PATH)' \
   -X '$(CFG_PKG).DefaultLogPath=$(LOG_PATH)'"
 
-.PHONY: all build build-location sign-location build-prod clean install uninstall \
+.PHONY: all build build-location sign-location build-prod build-debug clean install install-debug uninstall \
         setup setup-uninstall reload status logs tidy vet \
         build-linux build-windows build-all build-amd64 build-universal
 
@@ -186,19 +186,38 @@ tidy:
 vet:
 	go vet ./...
 
+# ── Debug build (embeds config.debug.json: localhost API + realtime_sync=true) ──
+build-debug:
+	@echo "Building $(BINARY)-debug (debug tags, GOOS=$(GOOS) GOARCH=$(GOARCH))…"
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) \
+		go build -tags debug $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-debug$(if $(filter windows,$(GOOS)),.exe,) $(CMD_PATH)
+	@echo "→ $(BIN_DIR)/$(BINARY)-debug (localhost:3000, realtime_sync=true)"
+
 # ── Install / uninstall (platform-aware) ──────────────────────────────────────
 ifeq ($(HOST_OS),darwin)
 install: build sign-location
 	@echo "Installing daemon (requires root)…"
 	sudo bash scripts/install.sh $(BIN_DIR)/$(BINARY) $(BIN_DIR)/$(LOC_BINARY)
+
+install-debug: build-debug sign-location
+	@echo "Installing DEBUG daemon (requires root)…"
+	sudo bash scripts/install.sh $(BIN_DIR)/$(BINARY)-debug $(BIN_DIR)/$(LOC_BINARY)
 else ifeq ($(HOST_OS),linux)
 install: build
 	@echo "Installing service (requires root)…"
 	sudo bash scripts/install-linux.sh $(BIN_DIR)/$(BINARY)
+
+install-debug: build-debug
+	@echo "Installing DEBUG service (requires root)…"
+	sudo bash scripts/install-linux.sh $(BIN_DIR)/$(BINARY)-debug
 else
 install:
 	@echo "On Windows, run scripts\\install-windows.ps1 as Administrator."
 	@echo "See README.md for instructions."
+
+install-debug:
+	@echo "On Windows, build with: go build -tags debug ./cmd/tracker"
 endif
 
 ifeq ($(HOST_OS),darwin)

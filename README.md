@@ -522,6 +522,76 @@ sudo make install
 
 > **Note:** macOS builds require CGo (for IOKit idle detection). Linux and Windows builds are pure Go — no CGo, no C compiler needed.
 
+### Local Debug Build
+
+A debug build embeds a separate config (`config.debug.json`) that points to `http://localhost:3000/api/machine-sync/sync` and enables `realtime_sync: true`. Use this to test against a local API server without touching the production binary or config.
+
+**macOS**
+
+```bash
+# Build the debug binary (./bin/time-tracker-debug)
+make build-debug
+
+# Install it as the running daemon (replaces the current daemon)
+sudo make install-debug
+
+# Verify it is using localhost
+sudo launchctl list | grep timetracker
+tail -f /var/log/time-tracker/output.log
+```
+
+To switch back to production:
+
+```bash
+sudo make install
+```
+
+**Linux**
+
+```bash
+# Build the debug binary (./bin/time-tracker-debug)
+make build-debug
+
+# Install it
+sudo make install-debug
+
+# Verify
+systemctl status time-tracker
+journalctl -u time-tracker -f
+```
+
+To switch back to production:
+
+```bash
+sudo make install
+```
+
+**Windows** (PowerShell as Administrator)
+
+```powershell
+# Build the debug binary
+go build -tags debug -ldflags "-s -w" -o bin\time-tracker-debug.exe .\cmd\tracker
+
+# Stop the running task and replace the binary
+Stop-ScheduledTask -TaskName TimeTracker
+Copy-Item bin\time-tracker-debug.exe "C:\ProgramData\time-tracker\time-tracker.exe" -Force
+Start-ScheduledTask -TaskName TimeTracker
+
+# Verify
+Get-ScheduledTask -TaskName TimeTracker
+Get-Content "C:\ProgramData\time-tracker\logs\output.log" -Tail 20 -Wait
+```
+
+To switch back to production:
+
+```powershell
+Stop-ScheduledTask -TaskName TimeTracker
+Copy-Item bin\time-tracker-windows-amd64.exe "C:\ProgramData\time-tracker\time-tracker.exe" -Force
+Start-ScheduledTask -TaskName TimeTracker
+```
+
+> The debug binary is identical to production except for the embedded config — same binary size optimisations, same location helper, same service setup.
+
 ---
 
 ## License

@@ -1,0 +1,14 @@
+{
+    "sync_api_url": "http://localhost:3000/api/machine-sync/sync",
+    "sync_api_key": "",
+    "morning_sync_hour": 6,
+    "evening_sync_hour": 18,
+    "evening_sync_minute": 30,
+    "idle_threshold_minutes": 5,
+    "poll_interval_seconds": 30,
+    "retention_days": 15,
+    "sync_timeout_seconds": 30,
+    "realtime_sync": true,
+    "google_geolocation_api_key": "",
+    "unwired_labs_api_token": ""
+}
