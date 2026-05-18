@@ -194,10 +194,16 @@ func (s *Syncer) realtimeSync(now time.Time) {
 
 // push sends sessions to the API with up to 3 retries.
 func (s *Syncer) push(syncType string, sessions []storage.Session) error {
+	// Normalise payload: absorb short blips into their predecessor, then
+	// collapse consecutive same-state sessions into a single entry.
+	// The original sessions slice is kept intact for MarkSynced below so
+	// every row — including absorbed ones — is marked synced in the local DB.
+	normalised := collapseConsecutive(mergeShortSessions(sessions, 5*time.Minute))
+	log.Printf("syncer: normalised %d raw session(s) → %d session(s) for push", len(sessions), len(normalised))
 	payload := syncRequest{
 		SyncType: syncType,
 		SyncedAt: time.Now().UTC().Format(time.RFC3339),
-		Sessions: toPayload(sessions),
+		Sessions: toPayload(normalised),
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -287,6 +293,83 @@ func (s *Syncer) prune() {
 	} else if n > 0 {
 		log.Printf("syncer: pruned %d old sessions", n)
 	}
+}
+
+// mergeShortSessions absorbs sessions whose individual duration is less than
+// minDur into the immediately preceding session (by extending its EndTime).
+//
+// Consecutive short sessions are collected into a "run" first:
+//   - If the run's combined duration >= minDur the sessions are genuinely
+//     significant and are kept unchanged.
+//   - If the run's combined duration < minDur the whole run is absorbed into
+//     the preceding session (no time is lost — the preceding session's EndTime
+//     is advanced to the last absorbed session's EndTime).
+//   - If no preceding session exists the run is kept as-is.
+//
+// Sessions whose individual duration >= minDur are always kept unchanged.
+func mergeShortSessions(sessions []storage.Session, minDur time.Duration) []storage.Session {
+	if len(sessions) == 0 {
+		return sessions
+	}
+	out := make([]storage.Session, 0, len(sessions))
+	i := 0
+	for i < len(sessions) {
+		if sessions[i].EndTime.Sub(sessions[i].StartTime) >= minDur {
+			out = append(out, sessions[i])
+			i++
+			continue
+		}
+		// Collect the full run of consecutive short sessions.
+		j := i
+		runTotal := time.Duration(0)
+		for j < len(sessions) && sessions[j].EndTime.Sub(sessions[j].StartTime) < minDur {
+			runTotal += sessions[j].EndTime.Sub(sessions[j].StartTime)
+			j++
+		}
+		runEnd := sessions[j-1].EndTime
+		if runTotal >= minDur {
+			// Collectively significant — keep every session unchanged.
+			out = append(out, sessions[i:j]...)
+		} else if len(out) > 0 && out[len(out)-1].Date == sessions[i].Date {
+			// Insignificant blip on the same calendar day — absorb into the preceding session.
+			log.Printf("syncer: absorbing %d short session(s) (%s total) into preceding %s session",
+				j-i, runTotal.Round(time.Second), out[len(out)-1].State)
+			out[len(out)-1].EndTime = runEnd
+		} else {
+			// No same-day preceding session — keep as-is.
+			out = append(out, sessions[i:j]...)
+		}
+		i = j
+	}
+	return out
+}
+
+// collapseConsecutive merges back-to-back sessions that share the same State
+// into a single session. The merged session takes the StartTime of the first
+// and the EndTime of the last. Location is taken from the first entry in the
+// run that has a non-zero fix.
+func collapseConsecutive(sessions []storage.Session) []storage.Session {
+	if len(sessions) == 0 {
+		return sessions
+	}
+	out := make([]storage.Session, 0, len(sessions))
+	out = append(out, sessions[0])
+	for i := 1; i < len(sessions); i++ {
+		prev := &out[len(out)-1]
+		cur := sessions[i]
+		if cur.State == prev.State && cur.Date == prev.Date {
+			// Extend the existing entry.
+			prev.EndTime = cur.EndTime
+			// Prefer the first non-zero location fix in the run.
+			if prev.Latitude == 0 && prev.Longitude == 0 && (cur.Latitude != 0 || cur.Longitude != 0) {
+				prev.Latitude = cur.Latitude
+				prev.Longitude = cur.Longitude
+			}
+		} else {
+			out = append(out, cur)
+		}
+	}
+	return out
 }
 
 func toPayload(sessions []storage.Session) []sessionPayload {
