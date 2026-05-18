@@ -322,45 +322,51 @@ func (s *Syncer) prune() {
 //     is advanced to the last absorbed session's EndTime).
 //   - If no same-day preceding session exists in the unsynced batch,
 //     predecessors (keyed by date) provides the last synced session per date
-//     as context. Short runs absorbed into a synced predecessor are dropped
-//     from the output entirely — the preceding session was already sent to the
-//     API, so the blip time is silently folded into it.
+//     as context. Short runs are dropped and the following session's StartTime
+//     is back-dated to the synced predecessor's EndTime, closing the gap.
 //
 // Sessions whose individual duration >= minDur are always kept unchanged.
 func mergeShortSessions(sessions []storage.Session, minDur time.Duration, predecessors map[string]storage.Session) []storage.Session {
 	if len(sessions) == 0 {
 		return sessions
 	}
-	out := make([]storage.Session, 0, len(sessions))
+	// Work on a shallow copy so we can adjust StartTimes without mutating the
+	// caller's slice (back-dating the session that follows a dropped run).
+	work := make([]storage.Session, len(sessions))
+	copy(work, sessions)
+	out := make([]storage.Session, 0, len(work))
 	i := 0
-	for i < len(sessions) {
-		if sessions[i].EndTime.Sub(sessions[i].StartTime) >= minDur {
-			out = append(out, sessions[i])
+	for i < len(work) {
+		if work[i].EndTime.Sub(work[i].StartTime) >= minDur {
+			out = append(out, work[i])
 			i++
 			continue
 		}
 		// Collect the full run of consecutive short sessions.
 		j := i
 		runTotal := time.Duration(0)
-		for j < len(sessions) && sessions[j].EndTime.Sub(sessions[j].StartTime) < minDur {
-			runTotal += sessions[j].EndTime.Sub(sessions[j].StartTime)
+		for j < len(work) && work[j].EndTime.Sub(work[j].StartTime) < minDur {
+			runTotal += work[j].EndTime.Sub(work[j].StartTime)
 			j++
 		}
-		runEnd := sessions[j-1].EndTime
-		date := sessions[i].Date
+		runEnd := work[j-1].EndTime
+		date := work[i].Date
 		if runTotal >= minDur {
 			// Collectively significant — keep every session unchanged.
-			out = append(out, sessions[i:j]...)
+			out = append(out, work[i:j]...)
 		} else if len(out) > 0 && out[len(out)-1].Date == date {
 			// Insignificant blip — absorb into the preceding unsynced session.
 			log.Printf("syncer: absorbing %d short session(s) (%s total) into preceding %s session",
 				j-i, runTotal.Round(time.Second), out[len(out)-1].State)
 			out[len(out)-1].EndTime = runEnd
-		} else if _, hasPred := predecessors[date]; hasPred {
-			// No unsynced predecessor, but the last synced session on this date
-			// is the natural predecessor — drop the blip (already accounted for).
+		} else if pred, hasPred := predecessors[date]; hasPred {
+			// No unsynced predecessor; absorb into the already-synced one.
+			// Back-date the following session to close the gap in the timeline.
 			log.Printf("syncer: dropping %d short session(s) (%s total) absorbed into already-synced predecessor",
 				j-i, runTotal.Round(time.Second))
+			if j < len(work) && work[j].Date == date {
+				work[j].StartTime = pred.EndTime
+			}
 		} else {
 			// No predecessor at all — keep as-is.
 			out = append(out, sessions[i:j]...)
