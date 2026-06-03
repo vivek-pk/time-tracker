@@ -34,7 +34,7 @@ MACOS_MIN_VERSION := 13.0
 # Embed Info.plist so macOS TCC can show the location permission dialog.
 LOC_LDFLAGS := -ldflags "-s -w -extldflags '-sectcreate __TEXT __info_plist $(CURDIR)/$(LOC_INFO_PLIST) -mmacosx-version-min=$(MACOS_MIN_VERSION)'"
 
-LDFLAGS := -ldflags "-s -w"   # strip debug info → smaller binary
+LDFLAGS = -ldflags "-s -w -X '$(CFG_PKG).Version=$(VERSION)'"   # strip debug info → smaller binary
 
 # Auto-detect host OS and architecture for native builds
 HOST_OS    := $(shell go env GOOS)
@@ -57,13 +57,15 @@ SYNC_API_URL ?=
 SYNC_API_KEY ?=
 DB_PATH      ?=
 LOG_PATH     ?=
+VERSION      ?= 1.5.5
 
 CFG_PKG := github.com/vivek/time-tracker/internal/config
 PROD_LDFLAGS := -ldflags "-s -w \
   -X '$(CFG_PKG).DefaultSyncAPIURL=$(SYNC_API_URL)' \
   -X '$(CFG_PKG).DefaultSyncAPIKey=$(SYNC_API_KEY)' \
   -X '$(CFG_PKG).DefaultDBPath=$(DB_PATH)' \
-  -X '$(CFG_PKG).DefaultLogPath=$(LOG_PATH)'"
+  -X '$(CFG_PKG).DefaultLogPath=$(LOG_PATH)' \
+  -X '$(CFG_PKG).Version=$(VERSION)'"
 
 .PHONY: all build build-location sign-location build-prod build-debug clean install install-debug uninstall \
         setup setup-uninstall reload status logs tidy vet \

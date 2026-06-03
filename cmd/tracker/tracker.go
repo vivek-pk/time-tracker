@@ -39,7 +39,7 @@ func runTracker(stopCh chan struct{}) {
 		defer logFile.Close()
 	}
 
-	log.Printf("starting machine=%s db=%s", cfg.MachineID, cfg.DBPath)
+	log.Printf("starting machine=%s db=%s version=%s", cfg.MachineID, cfg.DBPath, cfg.VersionID)
 
 	_ = os.MkdirAll(filepath.Dir(cfg.DBPath), 0o750)
 

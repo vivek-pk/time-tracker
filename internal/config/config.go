@@ -16,6 +16,7 @@ var (
 	DefaultSyncAPIKey = ""
 	DefaultDBPath     = "" // Set per-platform in paths_*.go init()
 	DefaultLogPath    = "" // Set per-platform in paths_*.go init()
+	Version           = "1.5.5" // Set at build time: -X 'config.Version=1.5.5'
 )
 
 // jsonConfig mirrors config.json structure. Pointer types for ints let us
@@ -54,6 +55,7 @@ type Config struct {
 	RealtimeSync         bool
 	GoogleGeoAPIKey      string
 	UnwiredLabsToken     string
+	VersionID            string // Release version of the binary (e.g. "v1.5.4")
 }
 
 // Load reads config with the following priority (highest wins):
@@ -86,6 +88,7 @@ func Load(envFilePath string) (*Config, error) {
 		RealtimeSync:         boolConfig(jc.RealtimeSync, false),
 		GoogleGeoAPIKey:      strConfig(jc.GoogleGeoAPIKey, ""),
 		UnwiredLabsToken:     strConfig(jc.UnwiredLabsToken, ""),
+		VersionID:            Version,
 	}
 	return cfg, cfg.validate()
 }

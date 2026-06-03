@@ -33,6 +33,8 @@ type Session struct {
 	// Location fields (empty when no GPS fix at session start)
 	Latitude  float64
 	Longitude float64
+	// VersionID is the release version of the binary that created this session.
+	VersionID string
 }
 
 // DB wraps a sql.DB for the tracker's usage pattern.
@@ -69,13 +71,13 @@ type LocationInfo struct {
 }
 
 // StartSession inserts a new open session and returns its ID.
-func (d *DB) StartSession(machineID string, state State, at time.Time, loc LocationInfo) (int64, error) {
+func (d *DB) StartSession(machineID string, state State, at time.Time, loc LocationInfo, versionID string) (int64, error) {
 	date := at.Local().Format("2006-01-02")
 	res, err := d.db.Exec(
-		`INSERT INTO sessions (machine_id, date, start_time, state, synced, latitude, longitude)
-		 VALUES (?,?,?,?,0,?,?)`,
+		`INSERT INTO sessions (machine_id, date, start_time, state, synced, latitude, longitude, version_id)
+		 VALUES (?,?,?,?,0,?,?,?)`,
 		machineID, date, at.UTC().UnixNano(), string(state),
-		loc.Latitude, loc.Longitude,
+		loc.Latitude, loc.Longitude, versionID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("storage: start session: %w", err)
@@ -155,7 +157,7 @@ func (d *DB) CloseHangingSessions(now time.Time) (int64, error) {
 // UnsyncedForDate returns closed, unsynced sessions for a specific date.
 func (d *DB) UnsyncedForDate(date string) ([]Session, error) {
 	rows, err := d.db.Query(
-		`SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude
+		`SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude, version_id
 			 FROM sessions WHERE date = ? AND synced = 0 AND end_time IS NOT NULL ORDER BY start_time`,
 		date,
 	)
@@ -169,7 +171,7 @@ func (d *DB) UnsyncedForDate(date string) ([]Session, error) {
 // UnsyncedAll returns all closed, unsynced sessions (used by realtime sync).
 func (d *DB) UnsyncedAll() ([]Session, error) {
 	rows, err := d.db.Query(
-		`SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude
+		`SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude, version_id
 			 FROM sessions WHERE synced = 0 AND end_time IS NOT NULL ORDER BY start_time`,
 	)
 	if err != nil {
@@ -193,7 +195,7 @@ func (d *DB) LastSyncedByDate(dates []string) (map[string]Session, error) {
 		placeholders[i] = "?"
 		args[i] = dt
 	}
-	query := `SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude
+	query := `SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude, version_id
 		FROM sessions
 		WHERE synced = 1 AND end_time IS NOT NULL AND date IN (` +
 		strings.Join(placeholders, ",") + `)
@@ -219,7 +221,7 @@ func (d *DB) LastSyncedByDate(dates []string) (map[string]Session, error) {
 // UnsyncedUpToDate returns closed, unsynced sessions with date <= date.
 func (d *DB) UnsyncedUpToDate(date string) ([]Session, error) {
 	rows, err := d.db.Query(
-		`SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude
+		`SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude, version_id
 			 FROM sessions WHERE date <= ? AND synced = 0 AND end_time IS NOT NULL ORDER BY date, start_time`,
 		date,
 	)
@@ -261,6 +263,8 @@ func migrate(db *sql.DB) error {
 	// Add location columns to existing databases (safe to ignore duplicate-column errors).
 	db.Exec(`ALTER TABLE sessions ADD COLUMN latitude REAL`)
 	db.Exec(`ALTER TABLE sessions ADD COLUMN longitude REAL`)
+	// Add version_id column (safe to ignore duplicate-column errors).
+	db.Exec(`ALTER TABLE sessions ADD COLUMN version_id TEXT`)
 	return nil
 }
 
@@ -271,7 +275,8 @@ func scanSessions(rows *sql.Rows) ([]Session, error) {
 		var startNano int64
 		var endNano sql.NullInt64
 		var lat, lon sql.NullFloat64
-		if err := rows.Scan(&s.ID, &s.MachineID, &s.Date, &startNano, &endNano, &s.State, &lat, &lon); err != nil {
+		var versionID sql.NullString
+		if err := rows.Scan(&s.ID, &s.MachineID, &s.Date, &startNano, &endNano, &s.State, &lat, &lon, &versionID); err != nil {
 			return nil, err
 		}
 		s.StartTime = time.Unix(0, startNano).UTC()
@@ -280,6 +285,7 @@ func scanSessions(rows *sql.Rows) ([]Session, error) {
 		}
 		s.Latitude = lat.Float64
 		s.Longitude = lon.Float64
+		s.VersionID = versionID.String
 		out = append(out, s)
 	}
 	return out, rows.Err()

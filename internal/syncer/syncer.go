@@ -24,6 +24,7 @@ type sessionPayload struct {
 	State     string  `json:"state"`
 	Latitude  float64 `json:"latitude,omitempty"`
 	Longitude float64 `json:"longitude,omitempty"`
+	VersionID string  `json:"version_id,omitempty"`
 }
 
 type syncRequest struct {
@@ -416,6 +417,7 @@ func toPayload(sessions []storage.Session) []sessionPayload {
 			State:     string(s.State),
 			Latitude:  s.Latitude,
 			Longitude: s.Longitude,
+			VersionID: s.VersionID,
 		})
 	}
 	return out

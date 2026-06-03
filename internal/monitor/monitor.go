@@ -40,8 +40,14 @@ func New(cfg *config.Config, db *storage.DB, locPath string) *Monitor {
 
 // Run starts the polling loop. Call in its own goroutine.
 func (m *Monitor) Run(stopCh <-chan struct{}) {
-	log.Printf("monitor: starting poll=%s idle_threshold=%s",
-		m.cfg.PollInterval(), m.cfg.IdleThreshold())
+	log.Printf("monitor: starting poll=%s idle_threshold=%s version=%s",
+		m.cfg.PollInterval(), m.cfg.IdleThreshold(), m.cfg.VersionID)
+
+	// Start the platform-specific sleep/wake watcher.
+	// On macOS this uses IOKit power notifications to set an atomic flag
+	// that prevents the monitor from processing during brief maintenance
+	// wakes (Power Nap). On other platforms this is a no-op.
+	startSleepWatcher()
 
 	// One-time HID probe check
 	testIdle := idleSeconds()
@@ -83,13 +89,27 @@ func (m *Monitor) poll(_ time.Time) {
 	sleepDetected := gap > 2*m.cfg.PollInterval()
 	m.lastPollAt = now
 
+	// If the IOKit sleep watcher reports the system is sleeping, skip all
+	// processing. This prevents spurious "active" sessions during brief
+	// macOS maintenance wakes (Power Nap, push notifications, etc.).
+	if isSystemSleeping() {
+		if sleepDetected && m.currentSessionID != 0 {
+			// Close the current session at the estimated sleep time.
+			asleepAt := now.Add(-gap)
+			log.Printf("monitor: system sleeping (IOKit), closing session at sleep time")
+			m.closeCurrentSession(asleepAt)
+		}
+		log.Printf("monitor: system sleeping (IOKit), skipping poll")
+		return
+	}
+
 	if sleepDetected {
 		log.Printf("monitor: sleep gap detected %.0fs", gap.Seconds())
 		asleepAt := now.Add(-gap)
 		if m.currentSessionID != 0 {
 			m.closeCurrentSession(asleepAt)
 		}
-		offlineID, err := m.db.StartSession(m.cfg.MachineID, storage.StateOffline, asleepAt, storage.LocationInfo{})
+		offlineID, err := m.db.StartSession(m.cfg.MachineID, storage.StateOffline, asleepAt, storage.LocationInfo{}, m.cfg.VersionID)
 		if err != nil {
 			log.Printf("monitor: start offline session: %v", err)
 		} else if closeErr := m.db.CloseSession(offlineID, now); closeErr != nil {
@@ -127,7 +147,7 @@ func (m *Monitor) poll(_ time.Time) {
 		// Anchoring here means the next gap is measured from when we actually
 		// finished creating this session, not before the refresh started.
 		m.lastPollAt = time.Now().Round(0)
-		id, err := m.db.StartSession(m.cfg.MachineID, newState, now, loc)
+		id, err := m.db.StartSession(m.cfg.MachineID, newState, now, loc, m.cfg.VersionID)
 		if err != nil {
 			log.Printf("monitor: start session state=%s: %v", newState, err)
 			return
