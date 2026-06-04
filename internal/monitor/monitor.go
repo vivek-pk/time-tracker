@@ -87,11 +87,15 @@ func (m *Monitor) poll(_ time.Time) {
 	now := time.Now().Round(0)
 	gap := now.Sub(m.lastPollAt)
 	sleepDetected := gap > 2*m.cfg.PollInterval()
-	m.lastPollAt = now
 
 	// If the IOKit sleep watcher reports the system is sleeping, skip all
 	// processing. This prevents spurious "active" sessions during brief
 	// macOS maintenance wakes (Power Nap, push notifications, etc.).
+	//
+	// IMPORTANT: Do NOT update m.lastPollAt here. Maintenance wakes must
+	// not advance the timestamp, otherwise the full sleep gap gets eaten
+	// incrementally and the offline session only covers the last
+	// maintenance-wake-to-real-wake interval.
 	if isSystemSleeping() {
 		if sleepDetected && m.currentSessionID != 0 {
 			// Close the current session at the estimated sleep time.
@@ -102,6 +106,9 @@ func (m *Monitor) poll(_ time.Time) {
 		log.Printf("monitor: system sleeping (IOKit), skipping poll")
 		return
 	}
+
+	// Only advance lastPollAt for real wakes (not maintenance wakes).
+	m.lastPollAt = now
 
 	if sleepDetected {
 		log.Printf("monitor: sleep gap detected %.0fs", gap.Seconds())
