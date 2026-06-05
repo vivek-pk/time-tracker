@@ -1,5 +1,5 @@
 {
-    "sync_api_url": "https://hrms-stage.coddletech.com/payload/api/machine-sync/sync",
+    "sync_api_url": "https://hrms.coddletech.com/payload/api/machine-sync/sync",
     "sync_api_key": "",
     "morning_sync_hour": 6,
     "evening_sync_hour": 18,

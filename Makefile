@@ -57,7 +57,7 @@ SYNC_API_URL ?=
 SYNC_API_KEY ?=
 DB_PATH      ?=
 LOG_PATH     ?=
-VERSION      ?= 1.5.6
+VERSION      ?= 1.6.0
 
 CFG_PKG := github.com/vivek/time-tracker/internal/config
 PROD_LDFLAGS := -ldflags "-s -w \
