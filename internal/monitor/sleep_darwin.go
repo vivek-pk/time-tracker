@@ -18,6 +18,31 @@ static io_connect_t root_port;
 static IONotificationPortRef notifyPortRef;
 static io_object_t notifierObject;
 
+// isDarkWake checks if the current wake is a DarkWake (maintenance wake /
+// Power Nap) by reading the "Wake Type" property from IOPMrootDomain.
+// Returns 1 for DarkWake (Maintenance, SleepService), 0 for full user wake.
+static int isDarkWake(void) {
+    io_service_t rootDomain = IOServiceGetMatchingService(
+        (mach_port_t)0,
+        IOServiceNameMatching("IOPMrootDomain"));
+    if (!rootDomain) return 0;
+
+    CFStringRef wakeType = (CFStringRef)IORegistryEntryCreateCFProperty(
+        rootDomain, CFSTR("Wake Type"), kCFAllocatorDefault, 0);
+    IOObjectRelease(rootDomain);
+
+    if (!wakeType) return 0;
+    if (CFGetTypeID(wakeType) != CFStringGetTypeID()) {
+        CFRelease(wakeType);
+        return 0;
+    }
+
+    int dark = (CFStringCompare(wakeType, CFSTR("Maintenance"), 0) == kCFCompareEqualTo ||
+                CFStringCompare(wakeType, CFSTR("SleepService"), 0) == kCFCompareEqualTo);
+    CFRelease(wakeType);
+    return dark;
+}
+
 // sleepCallbackC is invoked by IOKit on sleep/wake events.
 static void sleepCallbackC(void *refCon, io_service_t service,
                            natural_t messageType, void *messageArgument) {
@@ -32,8 +57,11 @@ static void sleepCallbackC(void *refCon, io_service_t service,
         IOAllowPowerChange(root_port, (long)messageArgument);
         break;
     case kIOMessageSystemHasPoweredOn:
-        // Full user-initiated wake.
-        goSleepCallback(2); // 2 = woke up
+        if (isDarkWake()) {
+            goSleepCallback(3); // 3 = dark wake (maintenance/Power Nap)
+        } else {
+            goSleepCallback(2); // 2 = full user wake
+        }
         break;
     }
 }
@@ -73,9 +101,12 @@ func goSleepCallback(messageType C.int) {
 	case 1: // going to sleep
 		log.Println("monitor: system going to sleep (IOKit)")
 		sleepFlag.Store(true)
-	case 2: // woke up
+	case 2: // woke up (full user wake)
 		log.Println("monitor: system woke up (IOKit)")
 		sleepFlag.Store(false)
+	case 3: // dark wake (maintenance/Power Nap)
+		log.Println("monitor: dark wake detected (IOKit) — staying in sleep mode")
+		// sleepFlag stays true — do not clear it for DarkWake
 	}
 }
 

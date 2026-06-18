@@ -139,13 +139,29 @@ func (d *DB) DeleteOlderThan(retentionDays int) (int64, error) {
 	return n, nil
 }
 
-// CloseHangingSessions sets end_time = now for any sessions that have no
-// end_time — these are sessions left open by a previous crash or SIGKILL.
-// Returns the number of sessions that were closed.
-func (d *DB) CloseHangingSessions(now time.Time) (int64, error) {
+// TouchSession updates last_heartbeat on an open session.
+// Called on every poll tick so that if the process is killed, we have an
+// accurate "last known alive" timestamp for crash recovery.
+// NOTE: This writes to last_heartbeat, NOT end_time. end_time stays NULL
+// for in-progress sessions so sync queries (which filter on end_time IS
+// NOT NULL) don't accidentally pick up active sessions.
+func (d *DB) TouchSession(id int64, at time.Time) error {
+	_, err := d.db.Exec(
+		"UPDATE sessions SET last_heartbeat = ? WHERE id = ?",
+		at.UTC().UnixNano(), id,
+	)
+	return err
+}
+
+// CloseHangingSessions fixes sessions left open by a previous crash or
+// SIGKILL. Uses the last_heartbeat timestamp (written every poll tick) as
+// the best approximation of when the process was last alive. Falls back to
+// start_time + fallbackBuffer if no heartbeat was ever recorded.
+func (d *DB) CloseHangingSessions(fallbackBuffer time.Duration) (int64, error) {
+	bufferNanos := int64(fallbackBuffer)
 	res, err := d.db.Exec(
-		"UPDATE sessions SET end_time = ? WHERE end_time IS NULL",
-		now.UTC().UnixNano(),
+		"UPDATE sessions SET end_time = COALESCE(last_heartbeat, start_time + ?) WHERE end_time IS NULL",
+		bufferNanos,
 	)
 	if err != nil {
 		return 0, err
@@ -265,6 +281,8 @@ func migrate(db *sql.DB) error {
 	db.Exec(`ALTER TABLE sessions ADD COLUMN longitude REAL`)
 	// Add version_id column (safe to ignore duplicate-column errors).
 	db.Exec(`ALTER TABLE sessions ADD COLUMN version_id TEXT`)
+	// Add last_heartbeat column for crash recovery (safe to ignore duplicate-column errors).
+	db.Exec(`ALTER TABLE sessions ADD COLUMN last_heartbeat INTEGER`)
 	return nil
 }
 
@@ -290,3 +308,31 @@ func scanSessions(rows *sql.Rows) ([]Session, error) {
 	}
 	return out, rows.Err()
 }
+
+// LastSession returns the most recent session by start_time.
+func (d *DB) LastSession() (*Session, error) {
+	var s Session
+	var startNano int64
+	var endNano sql.NullInt64
+	var lat, lon sql.NullFloat64
+	var versionID sql.NullString
+	err := d.db.QueryRow(
+		`SELECT id, machine_id, date, start_time, end_time, state, latitude, longitude, version_id
+		 FROM sessions ORDER BY start_time DESC LIMIT 1`,
+	).Scan(&s.ID, &s.MachineID, &s.Date, &startNano, &endNano, &s.State, &lat, &lon, &versionID)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	s.StartTime = time.Unix(0, startNano).UTC()
+	if endNano.Valid {
+		s.EndTime = time.Unix(0, endNano.Int64).UTC()
+	}
+	s.Latitude = lat.Float64
+	s.Longitude = lon.Float64
+	s.VersionID = versionID.String
+	return &s, nil
+}
+

@@ -52,7 +52,7 @@ func (m *Monitor) Run(stopCh <-chan struct{}) {
 	// One-time HID probe check
 	testIdle := idleSeconds()
 	if testIdle < 0 {
-		log.Println("monitor: idle detection unavailable (no display session) - will default to active")
+		log.Println("monitor: idle detection unavailable (no display session) - will classify as idle")
 	} else {
 		log.Printf("monitor: idle detection OK (current idle: %.1fs)", testIdle)
 	}
@@ -137,6 +137,12 @@ func (m *Monitor) poll(_ time.Time) {
 	
 	// Log every poll to show monitor is alive (log level: debug)
 	if m.currentSessionID != 0 && newState == m.currentState {
+		// Heartbeat: update last_heartbeat so that if the process is killed
+		// (power loss, OOM, SIGKILL), crash recovery can close this session
+		// at the last known alive time instead of hours/days later.
+		if err := m.db.TouchSession(m.currentSessionID, now); err != nil {
+			log.Printf("monitor: heartbeat session id=%d: %v", m.currentSessionID, err)
+		}
 		log.Printf("monitor: poll idle=%.1fs state=%s session=%d (no change)",
 			idleTime, m.currentState, m.currentSessionID)
 	}
@@ -168,8 +174,10 @@ func (m *Monitor) poll(_ time.Time) {
 func (m *Monitor) classifyState() storage.State {
 	idle := idleSeconds()
 	if idle < 0 {
-		// No display session — default to active (machine is on and working).
-		return storage.StateActive
+		// No HID session available. This typically happens during macOS
+		// DarkWake (Power Nap) when the display is off and no user is
+		// interacting. Classify as idle to avoid false "active" sessions.
+		return storage.StateIdle
 	}
 	if time.Duration(float64(time.Second)*idle) >= m.cfg.IdleThreshold() {
 		return storage.StateIdle

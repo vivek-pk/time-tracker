@@ -51,11 +51,30 @@ func runTracker(stopCh chan struct{}) {
 
 	log.Printf("database open -- %d existing session(s)", db.SessionCount())
 
-	if n, err := db.CloseHangingSessions(time.Now()); err != nil {
+	if n, err := db.CloseHangingSessions(2 * cfg.PollInterval()); err != nil {
 		log.Printf("warning: could not close hanging sessions: %v", err)
 	} else if n > 0 {
 		log.Printf("closed %d hanging session(s) from previous run", n)
 	}
+
+	// Insert offline session for any startup gap (e.g. system was shut down or tracker stopped)
+	if lastSess, err := db.LastSession(); err != nil {
+		log.Printf("warning: could not get last session: %v", err)
+	} else if lastSess != nil && !lastSess.EndTime.IsZero() {
+		now := time.Now()
+		gap := now.Sub(lastSess.EndTime)
+		if gap > 2*cfg.PollInterval() {
+			log.Printf("tracker: startup gap detected %.0fs, creating offline session from %s to %s",
+				gap.Seconds(), lastSess.EndTime.Local().Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"))
+			offlineID, err := db.StartSession(cfg.MachineID, storage.StateOffline, lastSess.EndTime, storage.LocationInfo{}, cfg.VersionID)
+			if err != nil {
+				log.Printf("warning: could not start startup offline session: %v", err)
+			} else if err := db.CloseSession(offlineID, now); err != nil {
+				log.Printf("warning: could not close startup offline session: %v", err)
+			}
+		}
+	}
+
 
 	// Read the last GPS fix written by the location helper.
 	// Empty if the helper hasn't run yet -- sessions will have no coordinates.
