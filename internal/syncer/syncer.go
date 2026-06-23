@@ -25,6 +25,8 @@ type sessionPayload struct {
 	Latitude  float64 `json:"latitude,omitempty"`
 	Longitude float64 `json:"longitude,omitempty"`
 	VersionID string  `json:"version_id,omitempty"`
+	PublicIP  string  `json:"public_ip,omitempty"`
+	SSID      string  `json:"ssid,omitempty"`
 }
 
 type syncRequest struct {
@@ -380,7 +382,8 @@ func mergeShortSessions(sessions []storage.Session, minDur time.Duration, predec
 // collapseConsecutive merges back-to-back sessions that share the same State
 // into a single session. The merged session takes the StartTime of the first
 // and the EndTime of the last. Location is taken from the first entry in the
-// run that has a non-zero fix.
+// run that has a non-zero fix. Network info (PublicIP, SSID) is taken from
+// the first non-empty value in the run.
 func collapseConsecutive(sessions []storage.Session) []storage.Session {
 	if len(sessions) == 0 {
 		return sessions
@@ -397,6 +400,13 @@ func collapseConsecutive(sessions []storage.Session) []storage.Session {
 			if prev.Latitude == 0 && prev.Longitude == 0 && (cur.Latitude != 0 || cur.Longitude != 0) {
 				prev.Latitude = cur.Latitude
 				prev.Longitude = cur.Longitude
+			}
+			// Prefer the first non-empty network info in the run.
+			if prev.PublicIP == "" && cur.PublicIP != "" {
+				prev.PublicIP = cur.PublicIP
+			}
+			if prev.SSID == "" && cur.SSID != "" {
+				prev.SSID = cur.SSID
 			}
 		} else {
 			out = append(out, cur)
@@ -418,6 +428,8 @@ func toPayload(sessions []storage.Session) []sessionPayload {
 			Latitude:  s.Latitude,
 			Longitude: s.Longitude,
 			VersionID: s.VersionID,
+			PublicIP:  s.PublicIP,
+			SSID:      s.SSID,
 		})
 	}
 	return out

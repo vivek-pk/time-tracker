@@ -152,7 +152,7 @@ func (m *Monitor) poll(_ time.Time) {
 			log.Printf("monitor: state changed %s->%s, closing session id=%d", m.currentState, newState, m.currentSessionID)
 			m.closeCurrentSession(now)
 		}
-		loc := m.refreshAndReadLocation()
+		loc := enrichWithNetworkInfo(m.refreshAndReadLocation())
 		// Update lastPollAt AFTER the location refresh completes.
 		// If the machine sleeps during the ~35s location wait, the next poll
 		// would see a huge gap from the pre-refresh lastPollAt and falsely
@@ -235,4 +235,16 @@ func (m *Monitor) readLocation() storage.LocationInfo {
 		Latitude:  info.Latitude,
 		Longitude: info.Longitude,
 	}
+}
+
+// enrichWithNetworkInfo fetches the current public IPv4 and WiFi SSID
+// and merges them into the given LocationInfo.
+func enrichWithNetworkInfo(loc storage.LocationInfo) storage.LocationInfo {
+	ni := location.FetchNetworkInfo()
+	loc.PublicIP = ni.PublicIP
+	loc.SSID = ni.SSID
+	if ni.PublicIP != "" || ni.SSID != "" {
+		log.Printf("monitor: network info: ip=%s ssid=%q", ni.PublicIP, ni.SSID)
+	}
+	return loc
 }
