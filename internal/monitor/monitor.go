@@ -234,6 +234,7 @@ func (m *Monitor) readLocation() storage.LocationInfo {
 	return storage.LocationInfo{
 		Latitude:  info.Latitude,
 		Longitude: info.Longitude,
+		SSID:      info.SSID,
 	}
 }
 
@@ -242,9 +243,11 @@ func (m *Monitor) readLocation() storage.LocationInfo {
 func enrichWithNetworkInfo(loc storage.LocationInfo) storage.LocationInfo {
 	ni := location.FetchNetworkInfo()
 	loc.PublicIP = ni.PublicIP
-	loc.SSID = ni.SSID
-	if ni.PublicIP != "" || ni.SSID != "" {
-		log.Printf("monitor: network info: ip=%s ssid=%q", ni.PublicIP, ni.SSID)
+	if loc.SSID == "" {
+		loc.SSID = ni.SSID
+	}
+	if ni.PublicIP != "" || loc.SSID != "" {
+		log.Printf("monitor: network info: ip=%s ssid=%q", ni.PublicIP, loc.SSID)
 	}
 	return loc
 }

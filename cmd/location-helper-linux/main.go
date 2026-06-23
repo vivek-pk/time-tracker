@@ -46,6 +46,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "location-helper: using IP geolocation (city-level accuracy)")
 	}
 
+	info.SSID = location.GetConnectedSSID()
+
 	if err := location.WriteToFile(outPath, info); err != nil {
 		fmt.Fprintf(os.Stderr, "location-helper: write %s: %v\n", outPath, err)
 		os.Exit(1)

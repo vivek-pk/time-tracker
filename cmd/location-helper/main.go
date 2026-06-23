@@ -180,6 +180,7 @@ func main() {
 		Longitude: float64(result.lon),
 		Accuracy:  float64(result.accuracy),
 		UpdatedAt: time.Now().UTC(),
+		SSID:      location.GetConnectedSSID(),
 	}
 
 	if err := location.WriteToFile(outPath, info); err != nil {

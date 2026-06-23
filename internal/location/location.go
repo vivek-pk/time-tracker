@@ -16,6 +16,7 @@ type Info struct {
 	Longitude float64   `json:"lon"`
 	Accuracy  float64   `json:"accuracy_m"`
 	UpdatedAt time.Time `json:"updated_at"`
+	SSID      string    `json:"ssid,omitempty"`
 }
 
 // Empty returns true when no valid fix has been captured yet.

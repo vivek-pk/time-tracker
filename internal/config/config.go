@@ -16,7 +16,7 @@ var (
 	DefaultSyncAPIKey = ""
 	DefaultDBPath     = "" // Set per-platform in paths_*.go init()
 	DefaultLogPath    = "" // Set per-platform in paths_*.go init()
-	Version           = "1.7.0" // Set at build time: -X 'config.Version=1.7.0'
+	Version           = "1.7.1" // Set at build time: -X 'config.Version=1.7.1'
 )
 
 // jsonConfig mirrors config.json structure. Pointer types for ints let us
